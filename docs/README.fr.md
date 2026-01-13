@@ -150,7 +150,7 @@ npm run dev
 3. **Observez la magie** — voyez les fichiers apparaître dans la Barre d'Artefacts
 4. **Prévisualisez et itérez** — cliquez sur n'importe quel fichier pour prévisualiser, demandez des modifications
 
-> **Conseil pro :** Pour de meilleurs résultats, utilisez les modèles Claude Sonnet 4 ou Opus 4.
+> **Conseil pro :** Pour de meilleurs résultats, utilisez les modèles Claude Sonnet 4.5 ou Opus 4.5.
 
 ---
 

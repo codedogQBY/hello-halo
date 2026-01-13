@@ -150,7 +150,7 @@ npm run dev
 3. **Beobachte die Magie** — sieh Dateien in der Artefakt-Leiste erscheinen
 4. **Vorschau & Iteration** — klicke auf jede Datei zur Vorschau, bitte um Änderungen
 
-> **Profi-Tipp:** Für beste Ergebnisse nutze Claude Sonnet 4 oder Opus 4 Modelle.
+> **Profi-Tipp:** Für beste Ergebnisse nutze Claude Sonnet 4.5 oder Opus 4.5 Modelle.
 
 ---
 
