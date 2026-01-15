@@ -86,13 +86,72 @@ When adding a new IPC event, update these 3 files:
 
 ## Pull Request Process
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run `npm run i18n` if you added any text
-5. Test your changes (`npm run dev`)
-6. Commit with clear message
-7. Push and create a Pull Request
+### 1. Get Started
+
+⭐ **Star the repository** to show your support!
+
+```bash
+# Fork and clone
+git clone https://github.com/YOUR_USERNAME/hello-halo.git
+cd hello-halo
+npm install
+
+# Create a feature branch from main
+git checkout -b fix/issue-number-description
+# or
+git checkout -b feat/new-feature-name
+```
+
+### 2. Find or Create an Issue
+
+- Check existing [Issues](https://github.com/openkursar/hello-halo/issues)
+- Create a new issue if needed
+- Comment on the issue to let us know you're working on it
+
+### 3. Development
+
+💡 **Recommended**: Use **Halo + Claude Opus 4.5** for development!
+
+- Follow the [Code Guidelines](#code-guidelines)
+- Write code and comments in English
+- Use `t()` for all user-facing text
+- Run `npm run i18n` after adding new text
+
+### 4. Testing
+
+```bash
+npm run dev    # Test your changes locally
+```
+
+### 5. Commit Your Changes
+
+Use conventional commit format:
+
+```bash
+# Format: <type>: <description>
+# Types: feat | fix | docs | style | refactor | test | chore
+
+git commit -m "fix: resolve input method issue in chat"
+git commit -m "feat: add multi-model support"
+git commit -m "docs: update README translation"
+```
+
+### 6. Create Pull Request
+
+```bash
+git push origin your-branch-name
+```
+
+Then create a PR on GitHub:
+- Link the related issue: `Fixes #issue_number`
+- Describe what you changed and why
+- Include screenshots for UI changes
+
+### 7. Review Process
+
+- Maintainers will review your code
+- Address any feedback if requested
+- Once approved, maintainers will merge and handle final testing/building
 
 ## Areas We Need Help
 
