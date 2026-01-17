@@ -6,7 +6,6 @@
 
 ### The First Open Source Cowork
 
-**The missing GUI for Claude Code.**
 
 Experience the full power of an AI coworker without touching the terminal. Halo brings a visual, cross-platform desktop experience to everyone—open source and free.
 
