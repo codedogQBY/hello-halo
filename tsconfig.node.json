@@ -9,11 +9,17 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["electron-vite/node"]
+    "types": ["electron-vite/node"],
+    "baseUrl": ".",
+    "paths": {
+      "@shared": ["src/shared"],
+      "@shared/*": ["src/shared/*"]
+    }
   },
   "include": [
     "src/main/**/*",
     "src/preload/**/*",
+    "src/shared/**/*",
     "electron.vite.config.ts"
   ]
 }

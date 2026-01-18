@@ -1,0 +1,23 @@
+{
+  "$schema": "./product.schema.json",
+  "name": "Halo",
+  "version": "1.0.0",
+  "authProviders": [
+    {
+      "type": "custom",
+      "displayName": {
+        "en": "Custom API",
+        "zh-CN": "自定义 API"
+      },
+      "description": {
+        "en": "Claude / OpenAI compatible",
+        "zh-CN": "兼容 Claude / OpenAI"
+      },
+      "icon": "key",
+      "iconBgColor": "#da7756",
+      "recommended": false,
+      "builtin": true,
+      "enabled": true
+    }
+  ]
+}

@@ -54,6 +54,7 @@ export default defineConfig({
     ],
     define: analyticsDefine,
     build: {
+      sourcemap: true,
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/main/index.ts')

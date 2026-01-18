@@ -1,18 +1,26 @@
 /**
- * API Setup - First-time configuration
+ * API Setup - Custom API configuration
  * No validation - just save and enter, errors will show on first chat
  * Includes language selector for first-time users
+ * Now supports back button for multi-source login flow
  */
 
 import { useState } from 'react'
 import { useAppStore } from '../../stores/app.store'
 import { api } from '../../api'
 import { Lightbulb } from '../icons/ToolIcons'
-import { Globe, ChevronDown } from 'lucide-react'
+import { Globe, ChevronDown, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { AVAILABLE_MODELS, DEFAULT_MODEL } from '../../types'
 import { useTranslation, setLanguage, getCurrentLanguage, SUPPORTED_LOCALES, type LocaleCode } from '../../i18n'
 
-export function ApiSetup() {
+interface ApiSetupProps {
+  /** Called when user clicks back button */
+  onBack?: () => void
+  /** Whether to show the back button */
+  showBack?: boolean
+}
+
+export function ApiSetup({ onBack, showBack = false }: ApiSetupProps) {
   const { t } = useTranslation()
   const { config, setConfig, setView } = useAppStore()
 
@@ -32,6 +40,8 @@ export function ApiSetup() {
   // Language selector state
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState(false)
   const [currentLang, setCurrentLang] = useState<LocaleCode>(getCurrentLanguage())
+  // API Key visibility
+  const [showApiKey, setShowApiKey] = useState(false)
 
   // Handle language change
   const handleLanguageChange = (lang: LocaleCode) => {
@@ -69,14 +79,22 @@ export function ApiSetup() {
     setError(null)
 
     try {
-      // Save config directly without validation
+      // Save config with new aiSources structure
+      const customConfig = {
+        provider: provider as 'anthropic' | 'openai',
+        apiKey,
+        apiUrl: apiUrl || 'https://api.anthropic.com',
+        model
+      }
+
       const newConfig = {
         ...config,
-        api: {
-          provider: provider as any,
-          apiKey,
-          apiUrl: apiUrl || 'https://api.anthropic.com',
-          model
+        // Legacy api field for backward compatibility
+        api: customConfig,
+        // New aiSources structure
+        aiSources: {
+          current: 'custom' as const,
+          custom: customConfig
         },
         isFirstLaunch: false
       }
@@ -94,6 +112,18 @@ export function ApiSetup() {
 
   return (
     <div className="h-full w-full flex flex-col items-center justify-center bg-background p-8 relative">
+      {/* Back Button - Top Left (when showBack is true) */}
+      {showBack && onBack && (
+        <div className="absolute top-6 left-6">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/80 rounded-lg transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Language Selector - Top Right */}
       <div className="absolute top-6 right-6">
         <div className="relative">
@@ -143,7 +173,9 @@ export function ApiSetup() {
 
       {/* Main content */}
       <div className="w-full max-w-md">
-        <h2 className="text-center text-lg mb-6">{t('Before you start, configure your AI')}</h2>
+        <h2 className="text-center text-lg mb-6">
+          {showBack ? t('Configure Custom API') : t('Before you start, configure your AI')}
+        </h2>
 
         <div className="bg-card rounded-xl p-6 border border-border">
           {/* Provider */}
@@ -178,13 +210,22 @@ export function ApiSetup() {
           {/* API Key input */}
           <div className="mb-4">
             <label className="block text-sm text-muted-foreground mb-2">API Key</label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={provider === 'openai' ? 'sk-xxxxxxxxxxxxx' : 'sk-ant-xxxxxxxxxxxxx'}
-              className="w-full px-4 py-2 bg-input rounded-lg border border-border focus:border-primary focus:outline-none transition-colors"
-            />
+            <div className="relative">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={provider === 'openai' ? 'sk-xxxxxxxxxxxxx' : 'sk-ant-xxxxxxxxxxxxx'}
+                className="w-full px-4 py-2 pr-12 bg-input rounded-lg border border-border focus:border-primary focus:outline-none transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {/* API URL input */}

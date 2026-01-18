@@ -50,7 +50,8 @@ async function fetchUpstream(
   apiKey: string,
   body: unknown,
   timeoutMs: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  customHeaders?: Record<string, string>
 ): Promise<globalThis.Response> {
   const controller = new AbortController()
   const timeout = setTimeout(() => {
@@ -59,12 +60,20 @@ async function fetchUpstream(
   }, timeoutMs)
 
   try {
+    // Build headers: start with custom headers, then add defaults
+    // Custom headers can override Authorization if needed (e.g., OAuth providers)
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(customHeaders || {}),
+    }
+    // Only add Authorization if not provided in custom headers
+    if (!headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${apiKey}`
+    }
+
     return await fetch(targetUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
-      },
+      headers,
       body: JSON.stringify(body),
       signal: signal ?? controller.signal
     })
@@ -83,15 +92,15 @@ export async function handleMessagesRequest(
   options: RequestHandlerOptions = {}
 ): Promise<void> {
   const { debug = false, timeoutMs = DEFAULT_TIMEOUT_MS } = options
-  const { url: backendUrl, key: apiKey, model } = config
+  const { url: backendUrl, key: apiKey, model, headers: customHeaders, apiType: configApiType } = config
 
   // Validate URL has valid endpoint suffix
   if (!isValidEndpointUrl(backendUrl)) {
     return sendError(res, 400, 'invalid_request_error', getEndpointUrlError(backendUrl))
   }
 
-  // Get API type from URL suffix (guaranteed non-null after validation)
-  const apiType = getApiTypeFromUrl(backendUrl)!
+  // Get API type from URL suffix, or use config override (guaranteed non-null after validation)
+  const apiType = configApiType || getApiTypeFromUrl(backendUrl)!
 
   // Override model if specified in config
   if (model) {
@@ -112,7 +121,7 @@ export async function handleMessagesRequest(
       // Determine stream mode
       const forceEnvStream = shouldForceStream()
       const preferStreamByWire = apiType === 'responses' && anthropicRequest.stream === undefined
-      let wantStream = forceEnvStream || preferStreamByWire || anthropicRequest.stream
+      let wantStream = forceEnvStream || config.forceStream || preferStreamByWire || anthropicRequest.stream
 
       // Convert request
       const requestToSend = { ...anthropicRequest, stream: wantStream }
@@ -125,7 +134,7 @@ export async function handleMessagesRequest(
       console.log(`[RequestHandler] POST ${backendUrl} (stream=${wantStream ?? false})`)
 
       // Make upstream request - URL is used directly, no modification
-      let upstreamResp = await fetchUpstream(backendUrl, apiKey, openaiRequest, timeoutMs)
+      let upstreamResp = await fetchUpstream(backendUrl, apiKey, openaiRequest, timeoutMs, undefined, customHeaders)
       console.log(`[RequestHandler] Upstream response: ${upstreamResp.status}`)
 
       // Handle errors
@@ -150,7 +159,7 @@ export async function handleMessagesRequest(
             ? convertAnthropicToOpenAIResponses({ ...anthropicRequest, stream: true }).request
             : convertAnthropicToOpenAIChat({ ...anthropicRequest, stream: true }).request
 
-          upstreamResp = await fetchUpstream(backendUrl, apiKey, retryRequest, timeoutMs)
+          upstreamResp = await fetchUpstream(backendUrl, apiKey, retryRequest, timeoutMs, undefined, customHeaders)
 
           if (!upstreamResp.ok) {
             const retryErrorText = await upstreamResp.text().catch(() => '')

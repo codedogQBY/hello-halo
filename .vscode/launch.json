@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Main Process",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron-vite",
+      "runtimeArgs": ["dev"],
+      "env": {
+        "HALO_DATA_DIR": "~/.halo-dev"
+      },
+      "console": "integratedTerminal",
+      "skipFiles": [
+        "<node_internals>/**",
+        "**/node_modules/**"
+      ],
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/out/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/out/main/**/*.mjs",
+        "${workspaceFolder}/out/main/**/*.js"
+      ]
+    },
+    {
+      "name": "Attach to Main Process",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "skipFiles": [
+        "<node_internals>/**",
+        "**/node_modules/**"
+      ],
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/out/**"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/out/main/**/*.mjs",
+        "${workspaceFolder}/out/main/**/*.js"
+      ]
+    }
+  ]
+}

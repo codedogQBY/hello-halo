@@ -5,6 +5,9 @@
 // API Provider Configuration
 export type ApiProvider = 'anthropic' | 'openai';
 
+// AI Source type - which provider is being used
+export type AISourceType = 'oauth' | 'custom' | string;
+
 // Available Claude models
 export interface ModelOption {
   id: string;
@@ -79,6 +82,47 @@ export interface RemoteAccessConfig {
 }
 
 // ============================================
+// AI Sources Configuration (Multi-platform login)
+// ============================================
+
+// OAuth provider user info
+export interface OAuthUserInfo {
+  name: string;
+  avatar?: string;
+  uid?: string;
+}
+
+// OAuth source configuration (generic for any OAuth provider)
+export interface OAuthSourceConfig {
+  loggedIn: boolean;
+  user?: OAuthUserInfo;
+  model: string;
+  availableModels: string[];
+  modelNames?: Record<string, string>;
+  // Provider-specific token data - managed by main process
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpires?: number;
+}
+
+// Custom API source configuration (same as existing ApiConfig)
+export interface CustomSourceConfig {
+  provider: ApiProvider;
+  apiKey: string;
+  apiUrl: string;
+  model: string;
+}
+
+// AI Sources - manages multiple login sources
+export interface AISourcesConfig {
+  current: AISourceType;  // Which source is currently active
+  oauth?: OAuthSourceConfig;
+  custom?: CustomSourceConfig;
+  // Dynamic provider configs (keyed by provider type)
+  [key: string]: AISourceType | OAuthSourceConfig | CustomSourceConfig | undefined;
+}
+
+// ============================================
 // MCP Server Configuration Types
 // Format compatible with Cursor / Claude Desktop
 // ============================================
@@ -129,7 +173,8 @@ export interface McpServerStatus {
 }
 
 export interface HaloConfig {
-  api: ApiConfig;
+  api: ApiConfig;  // Legacy, kept for backward compatibility
+  aiSources?: AISourcesConfig;  // New multi-source configuration
   permissions: PermissionConfig;
   appearance: AppearanceConfig;
   system: SystemConfig;
@@ -471,6 +516,9 @@ export const DEFAULT_CONFIG: HaloConfig = {
     apiUrl: 'https://api.anthropic.com',
     model: DEFAULT_MODEL
   },
+  aiSources: {
+    current: 'custom',  // Default to custom API (no source configured yet)
+  },
   permissions: {
     fileAccess: 'allow',
     commandExecution: 'ask',
@@ -491,6 +539,56 @@ export const DEFAULT_CONFIG: HaloConfig = {
   mcpServers: {},  // Empty by default
   isFirstLaunch: true
 };
+
+// Helper function to check if any AI source is configured
+export function hasAnyAISource(config: HaloConfig): boolean {
+  const aiSources = config.aiSources;
+  if (!aiSources) {
+    return !!config.api?.apiKey;
+  }
+  const hasCustom = !!(aiSources.custom?.apiKey);
+
+  // Check any OAuth provider dynamically (any key with loggedIn: true except 'current' and 'custom')
+  const hasOAuth = Object.keys(aiSources).some(key => {
+    if (key === 'current' || key === 'custom') return false;
+    const source = aiSources[key as keyof typeof aiSources] as OAuthSourceConfig | undefined;
+    return source?.loggedIn === true;
+  });
+
+  return hasOAuth || hasCustom;
+}
+
+// Helper function to get current model display name
+export function getCurrentModelName(config: HaloConfig): string {
+  const aiSources = config.aiSources;
+  if (!aiSources) {
+    const legacyModel = config.api?.model;
+    const model = AVAILABLE_MODELS.find(m => m.id === legacyModel);
+    return model?.name || legacyModel || 'No model';
+  }
+
+  // Check OAuth provider first
+  if (aiSources.current === 'oauth' && aiSources.oauth) {
+    return aiSources.oauth.model || 'Default';
+  }
+
+  // Check custom API
+  if (aiSources.current === 'custom' && aiSources.custom) {
+    const model = AVAILABLE_MODELS.find(m => m.id === aiSources.custom?.model);
+    return model?.name || aiSources.custom.model;
+  }
+
+  // Check dynamic provider (from config)
+  const dynamicConfig = aiSources[aiSources.current] as OAuthSourceConfig | undefined;
+  if (dynamicConfig && typeof dynamicConfig === 'object' && 'model' in dynamicConfig) {
+    const modelId = dynamicConfig.model;
+    // Use modelNames mapping if available, otherwise fall back to model ID
+    const displayName = dynamicConfig.modelNames?.[modelId] || modelId;
+    return displayName || 'Default';
+  }
+
+  return 'No model';
+}
 
 // Icon options for spaces (using icon IDs that map to Lucide icons)
 export const SPACE_ICONS = [

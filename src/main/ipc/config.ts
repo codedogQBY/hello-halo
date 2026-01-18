@@ -4,13 +4,35 @@
 
 import { ipcMain } from 'electron'
 import { getConfig, saveConfig, validateApiConnection } from '../services/config.service'
+import { getAISourceManager } from '../services/ai-sources'
+import { encryptString, decryptString } from '../services/secure-storage.service'
 
 export function registerConfigHandlers(): void {
   // Get configuration
   ipcMain.handle('config:get', async () => {
     try {
-      const config = getConfig()
-      return { success: true, data: config }
+      const config = getConfig() as Record<string, any>
+
+      // Decrypt custom API key before sending to renderer
+      const decryptedConfig = { ...config }
+      if (decryptedConfig.aiSources?.custom?.apiKey) {
+        decryptedConfig.aiSources = {
+          ...decryptedConfig.aiSources,
+          custom: {
+            ...decryptedConfig.aiSources.custom,
+            apiKey: decryptString(decryptedConfig.aiSources.custom.apiKey)
+          }
+        }
+      }
+      // Also handle legacy api.apiKey
+      if (decryptedConfig.api?.apiKey) {
+        decryptedConfig.api = {
+          ...decryptedConfig.api,
+          apiKey: decryptString(decryptedConfig.api.apiKey)
+        }
+      }
+
+      return { success: true, data: decryptedConfig }
     } catch (error: unknown) {
       const err = error as Error
       return { success: false, error: err.message }
@@ -20,7 +42,49 @@ export function registerConfigHandlers(): void {
   // Save configuration
   ipcMain.handle('config:set', async (_event, updates: Record<string, unknown>) => {
     try {
-      const config = saveConfig(updates)
+      // Encrypt custom API key if present
+      const processedUpdates = { ...updates }
+      const incomingAiSources = processedUpdates.aiSources as Record<string, any> | undefined
+      if (incomingAiSources && typeof incomingAiSources === 'object') {
+        const currentConfig = getConfig() as Record<string, any>
+        const currentAiSources = currentConfig.aiSources || { current: 'custom' }
+        const mergedAiSources: Record<string, any> = {
+          ...currentAiSources,
+          ...incomingAiSources
+        }
+
+        for (const key of Object.keys(incomingAiSources)) {
+          if (key === 'current') continue
+          const incomingValue = incomingAiSources[key]
+          const currentValue = currentAiSources[key]
+          if (incomingValue && typeof incomingValue === 'object' && !Array.isArray(incomingValue)
+            && currentValue && typeof currentValue === 'object' && !Array.isArray(currentValue)) {
+            mergedAiSources[key] = {
+              ...currentValue,
+              ...incomingValue
+            }
+          }
+        }
+
+        processedUpdates.aiSources = mergedAiSources
+      }
+
+      const aiSources = processedUpdates.aiSources as Record<string, any> | undefined
+      if (aiSources?.custom?.apiKey && typeof aiSources.custom.apiKey === 'string') {
+        // Only encrypt if not already encrypted
+        if (!aiSources.custom.apiKey.startsWith('enc:')) {
+          aiSources.custom.apiKey = encryptString(aiSources.custom.apiKey)
+        }
+      }
+      // Also handle legacy api.apiKey
+      const api = processedUpdates.api as Record<string, any> | undefined
+      if (api?.apiKey && typeof api.apiKey === 'string') {
+        if (!api.apiKey.startsWith('enc:')) {
+          api.apiKey = encryptString(api.apiKey)
+        }
+      }
+
+      const config = saveConfig(processedUpdates)
       return { success: true, data: config }
     } catch (error: unknown) {
       const err = error as Error
@@ -41,4 +105,18 @@ export function registerConfigHandlers(): void {
       }
     }
   )
+
+  // Refresh AI sources configuration (auto-detects logged-in sources)
+  ipcMain.handle('config:refresh-ai-sources', async () => {
+    try {
+      const manager = getAISourceManager()
+      await manager.refreshAllConfigs()
+      const config = getConfig()
+      return { success: true, data: config }
+    } catch (error: unknown) {
+      const err = error as Error
+      console.error('[Config IPC] Refresh AI sources error:', err)
+      return { success: false, error: err.message }
+    }
+  })
 }

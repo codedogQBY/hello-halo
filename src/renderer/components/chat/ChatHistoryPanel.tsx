@@ -16,6 +16,10 @@ interface ChatHistoryPanelProps {
   onDelete?: (id: string) => void
   onRename?: (id: string, newTitle: string) => void
   spaceName: string
+  /** Callback to toggle sidebar visibility */
+  onToggleSidebar?: () => void
+  /** Whether sidebar is currently visible */
+  isSidebarVisible?: boolean
 }
 
 // Format relative time
@@ -53,7 +57,9 @@ export function ChatHistoryPanel({
   onNew,
   onDelete,
   onRename,
-  spaceName
+  spaceName,
+  onToggleSidebar,
+  isSidebarVisible
 }: ChatHistoryPanelProps) {
   const { t } = useTranslation()
   const [isExpanded, setIsExpanded] = useState(false)
@@ -368,13 +374,36 @@ export function ChatHistoryPanel({
             </div>
 
             {/* Footer */}
-            {conversations.length > 5 && (
-              <div className="px-4 py-2 border-t border-border/30 text-center">
-                <span className="text-xs text-muted-foreground/60">
-                  {t('Showing last {{count}} conversations', { count: conversations.length })}
-                </span>
-              </div>
-            )}
+            <div className="px-4 py-2 border-t border-border/30 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground/60">
+                {conversations.length > 5
+                  ? t('Showing last {{count}} conversations', { count: conversations.length })
+                  : '\u00A0' /* Non-breaking space to maintain height */
+                }
+              </span>
+              {onToggleSidebar && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onToggleSidebar()
+                    handleClose()
+                  }}
+                  className={`
+                    flex items-center gap-1.5 px-2 py-1 text-xs rounded-md transition-colors
+                    ${isSidebarVisible
+                      ? 'bg-primary/20 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                    }
+                  `}
+                  title={t('Sidebar')}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                  </svg>
+                  <span>{t('Sidebar')}</span>
+                </button>
+              )}
+            </div>
           </div>
         </>
       )}

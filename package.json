@@ -7,7 +7,7 @@
   "author": "Halo Team",
   "license": "MIT",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "HALO_DATA_DIR=~/.halo-dev electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "postinstall": "patch-package && electron-builder install-app-deps",
@@ -15,6 +15,9 @@
     "build:win": "npm run build && electron-builder --win",
     "build:win-x64": "npm run build && electron-builder --win --x64",
     "prepare:win-x64": "node scripts/prepare-cloudflared-win-x64.mjs",
+    "prepare:mac-x64": "node scripts/prepare-cloudflared-mac-x64.mjs",
+    "prepare:linux-x64": "node scripts/prepare-cloudflared-linux-x64.mjs",
+    "build:mac-x64": "npm run build && electron-builder --mac --x64",
     "build:linux": "npm run build && electron-builder --linux",
     "icons": "bash scripts/generate-icons.sh",
     "release": "npm run build && electron-builder --mac --win --publish always",
@@ -102,7 +105,9 @@
     },
     "files": [
       "out/**/*",
-      "resources/**/*"
+      "resources/**/*",
+      "product.json",
+      "halo-local/dist/**/*"
     ],
     "asarUnpack": [
       "node_modules/cloudflared/**/*"

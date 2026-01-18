@@ -2,6 +2,10 @@
 
 Thanks for your interest in contributing to Halo! This guide will help you get started.
 
+## About This Project
+
+**Note**: This is a personal hobby project built for self-use and friends. Updates and PR merges happen whenever I find time (usually weekends, but no promises - life happens! 😄).
+
 ## Development Setup
 
 ```bash
@@ -152,6 +156,18 @@ Then create a PR on GitHub:
 - Maintainers will review your code
 - Address any feedback if requested
 - Once approved, maintainers will merge and handle final testing/building
+
+## Extending Halo
+
+### Custom AI Providers
+
+Halo supports custom AI source providers through a plugin architecture. You can create your own OAuth or API key-based providers.
+
+See **[docs/custom-providers.md](docs/custom-providers.md)** for the complete guide, including:
+- Provider interface definitions
+- Type references (`@shared/interfaces`, `@shared/types`)
+- Implementation examples
+- Registration via `product.json`
 
 ## Areas We Need Help
 

@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 
 // Import analytics config type
 import type { AnalyticsConfig } from './analytics/types'
+import type { AISourcesConfig, CustomSourceConfig } from '../../shared/types'
 
 // ============================================================================
 // API Config Change Notification (Callback Pattern)
@@ -44,6 +45,8 @@ interface HaloConfig {
     apiUrl: string
     model: string
   }
+  // Multi-source AI configuration (OAuth + Custom API)
+  aiSources?: AISourcesConfig
   permissions: {
     fileAccess: 'allow' | 'ask' | 'deny'
     commandExecution: 'allow' | 'ask' | 'deny'
@@ -107,6 +110,24 @@ interface McpSseServerConfig {
 // Use os.homedir() instead of app.getPath('home') to respect HOME environment variable
 // This is essential for E2E tests to run in isolated test directories
 export function getHaloDir(): string {
+  // 1. Support custom data directory via environment variable
+  //    Useful for development to avoid conflicts with production data
+  if (process.env.HALO_DATA_DIR) {
+    let dir = process.env.HALO_DATA_DIR
+    // Expand ~ to home directory (shell doesn't expand in env vars)
+    if (dir.startsWith('~')) {
+      dir = join(homedir(), dir.slice(1))
+    }
+    return dir
+  }
+
+  // 2. Auto-detect development mode: use separate directory
+  //    app.isPackaged is false when running via electron-vite dev
+  if (!app.isPackaged) {
+    return join(homedir(), '.halo-dev')
+  }
+
+  // 3. Production: use default directory
   return join(homedir(), '.halo')
 }
 
@@ -133,6 +154,9 @@ const DEFAULT_CONFIG: HaloConfig = {
     apiUrl: 'https://api.anthropic.com',
     model: DEFAULT_MODEL
   },
+  aiSources: {
+    current: 'custom'
+  },
   permissions: {
     fileAccess: 'allow',
     commandExecution: 'ask',
@@ -155,6 +179,75 @@ const DEFAULT_CONFIG: HaloConfig = {
   },
   mcpServers: {},  // Empty by default
   isFirstLaunch: true
+}
+
+function normalizeAiSources(parsed: Record<string, any>): AISourcesConfig {
+  const raw = parsed?.aiSources
+  const aiSources: AISourcesConfig = {
+    ...(raw && typeof raw === 'object' ? raw : {})
+  }
+
+  if (!aiSources.current) {
+    aiSources.current = 'custom'
+  }
+
+  const legacyApi = parsed?.api
+  const hasLegacyApi =
+    typeof legacyApi?.apiKey === 'string' && legacyApi.apiKey.length > 0
+
+  if (!aiSources.custom && hasLegacyApi) {
+    const provider = legacyApi?.provider === 'openai' ? 'openai' : 'anthropic'
+    aiSources.custom = {
+      provider,
+      apiKey: legacyApi?.apiKey || '',
+      apiUrl: legacyApi?.apiUrl || (provider === 'openai' ? 'https://api.openai.com' : 'https://api.anthropic.com'),
+      model: legacyApi?.model || DEFAULT_MODEL
+    } as CustomSourceConfig
+  }
+
+  if (aiSources.custom) {
+    const provider = aiSources.custom.provider === 'openai' ? 'openai' : 'anthropic'
+    aiSources.custom = {
+      provider,
+      apiKey: aiSources.custom.apiKey || '',
+      apiUrl: aiSources.custom.apiUrl || (provider === 'openai' ? 'https://api.openai.com' : 'https://api.anthropic.com'),
+      model: aiSources.custom.model || DEFAULT_MODEL
+    }
+  }
+
+  return aiSources
+}
+
+function getAiSourcesSignature(aiSources?: AISourcesConfig): string {
+  if (!aiSources) return ''
+  const current = aiSources.current || 'custom'
+
+  // Note: model is excluded from signature because V2 Session supports dynamic model switching
+  // (via setModel method). Only changes to credentials/provider should invalidate sessions.
+  if (current === 'custom') {
+    const custom = aiSources.custom
+    return [
+      'custom',
+      custom?.provider || '',
+      custom?.apiUrl || '',
+      custom?.apiKey || ''
+      // model excluded: dynamic switching supported
+    ].join('|')
+  }
+
+  const currentConfig = aiSources[current] as Record<string, any> | undefined
+  if (currentConfig && typeof currentConfig === 'object') {
+    return [
+      'oauth',
+      current,
+      currentConfig.accessToken || '',
+      currentConfig.refreshToken || '',
+      currentConfig.tokenExpires || ''
+      // model excluded: dynamic switching supported
+    ].join('|')
+  }
+
+  return current
 }
 
 // Initialize app directories
@@ -191,11 +284,13 @@ export function getConfig(): HaloConfig {
   try {
     const content = readFileSync(configPath, 'utf-8')
     const parsed = JSON.parse(content)
+    const aiSources = normalizeAiSources(parsed)
     // Deep merge to ensure all nested defaults are applied
     return {
       ...DEFAULT_CONFIG,
       ...parsed,
       api: { ...DEFAULT_CONFIG.api, ...parsed.api },
+      aiSources,
       permissions: { ...DEFAULT_CONFIG.permissions, ...parsed.permissions },
       appearance: { ...DEFAULT_CONFIG.appearance, ...parsed.appearance },
       system: { ...DEFAULT_CONFIG.system, ...parsed.system },
@@ -215,6 +310,7 @@ export function getConfig(): HaloConfig {
 export function saveConfig(config: Partial<HaloConfig>): HaloConfig {
   const currentConfig = getConfig()
   const newConfig = { ...currentConfig, ...config }
+  const previousAiSourcesSignature = getAiSourcesSignature(currentConfig.aiSources)
 
   // Deep merge for nested objects
   if (config.api) {
@@ -250,13 +346,17 @@ export function saveConfig(config: Partial<HaloConfig>): HaloConfig {
 
   // Detect API config changes and notify subscribers
   // This allows agent.service to invalidate sessions when API config changes
-  if (config.api) {
-    const apiChanged =
-      config.api.provider !== currentConfig.api.provider ||
-      config.api.apiKey !== currentConfig.api.apiKey ||
-      config.api.apiUrl !== currentConfig.api.apiUrl
+  const nextAiSourcesSignature = getAiSourcesSignature(newConfig.aiSources)
+  const aiSourcesChanged = previousAiSourcesSignature !== nextAiSourcesSignature
 
-    if (apiChanged && apiConfigChangeHandlers.length > 0) {
+  if (config.api || config.aiSources) {
+    const apiChanged =
+      !!config.api &&
+      (config.api.provider !== currentConfig.api.provider ||
+        config.api.apiKey !== currentConfig.api.apiKey ||
+        config.api.apiUrl !== currentConfig.api.apiUrl)
+
+    if ((apiChanged || aiSourcesChanged) && apiConfigChangeHandlers.length > 0) {
       console.log('[Config] API config changed, notifying subscribers...')
       // Use setTimeout to avoid blocking the save operation
       // and ensure all handlers are called asynchronously

@@ -6,10 +6,20 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 // Type definitions for exposed API
 export interface HaloAPI {
+  // Generic Auth (provider-agnostic)
+  authGetProviders: () => Promise<IpcResponse>
+  authStartLogin: (providerType: string) => Promise<IpcResponse>
+  authCompleteLogin: (providerType: string, state: string) => Promise<IpcResponse>
+  authRefreshToken: (providerType: string) => Promise<IpcResponse>
+  authCheckToken: (providerType: string) => Promise<IpcResponse>
+  authLogout: (providerType: string) => Promise<IpcResponse>
+  onAuthLoginProgress: (callback: (data: { provider: string; status: string }) => void) => () => void
+
   // Config
   getConfig: () => Promise<IpcResponse>
   setConfig: (updates: Record<string, unknown>) => Promise<IpcResponse>
   validateApi: (apiKey: string, apiUrl: string, provider: string) => Promise<IpcResponse>
+  refreshAISourcesConfig: () => Promise<IpcResponse>
 
   // Space
   getHaloSpace: () => Promise<IpcResponse>
@@ -263,11 +273,21 @@ function createEventListener(channel: string, callback: (data: unknown) => void)
 
 // Expose API to renderer
 const api: HaloAPI = {
+  // Generic Auth (provider-agnostic)
+  authGetProviders: () => ipcRenderer.invoke('auth:get-providers'),
+  authStartLogin: (providerType) => ipcRenderer.invoke('auth:start-login', providerType),
+  authCompleteLogin: (providerType, state) => ipcRenderer.invoke('auth:complete-login', providerType, state),
+  authRefreshToken: (providerType) => ipcRenderer.invoke('auth:refresh-token', providerType),
+  authCheckToken: (providerType) => ipcRenderer.invoke('auth:check-token', providerType),
+  authLogout: (providerType) => ipcRenderer.invoke('auth:logout', providerType),
+  onAuthLoginProgress: (callback) => createEventListener('auth:login-progress', callback as (data: unknown) => void),
+
   // Config
   getConfig: () => ipcRenderer.invoke('config:get'),
   setConfig: (updates) => ipcRenderer.invoke('config:set', updates),
   validateApi: (apiKey, apiUrl, provider) =>
     ipcRenderer.invoke('config:validate-api', apiKey, apiUrl, provider),
+  refreshAISourcesConfig: () => ipcRenderer.invoke('config:refresh-ai-sources'),
 
   // Space
   getHaloSpace: () => ipcRenderer.invoke('space:get-halo'),

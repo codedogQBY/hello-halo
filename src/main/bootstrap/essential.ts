@@ -27,6 +27,7 @@ import { registerAgentHandlers } from '../ipc/agent'
 import { registerArtifactHandlers } from '../ipc/artifact'
 import { registerSystemHandlers } from '../ipc/system'
 import { registerUpdaterHandlers, initAutoUpdater } from '../services/updater.service'
+import { registerAuthHandlers } from '../ipc/auth'
 
 /**
  * Initialize essential services required for first screen render
@@ -45,6 +46,9 @@ export function initializeEssentialServices(mainWindow: BrowserWindow): void {
 
   // Config: Must be first - other services may depend on configuration
   registerConfigHandlers()
+
+  // Auth: OAuth login handlers for multi-platform login (generic + backward compat)
+  registerAuthHandlers()
 
   // Space: Workspace list is displayed immediately on the left sidebar
   registerSpaceHandlers()

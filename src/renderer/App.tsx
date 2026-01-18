@@ -11,14 +11,15 @@ import { initPerfStoreListeners } from './stores/perf.store'
 import { useSpaceStore } from './stores/space.store'
 import { useSearchStore } from './stores/search.store'
 import { SplashScreen } from './components/splash/SplashScreen'
-import { ApiSetup } from './components/setup/ApiSetup'
+import { SetupFlow } from './components/setup/SetupFlow'
 import { GitBashSetup } from './components/setup/GitBashSetup'
 import { SearchPanel } from './components/search/SearchPanel'
 import { SearchHighlightBar } from './components/search/SearchHighlightBar'
 import { OnboardingOverlay } from './components/onboarding'
 import { UpdateNotification } from './components/updater/UpdateNotification'
 import { api } from './api'
-import type { AgentEventBase, Thought, ToolCall } from './types'
+import type { AgentEventBase, Thought, ToolCall, HaloConfig } from './types'
+import { hasAnyAISource } from './types'
 
 // Lazy load heavy page components for better initial load performance
 // These pages contain complex components (chat, markdown, code highlighting, etc.)
@@ -410,9 +411,10 @@ export default function App() {
     // Continue with normal initialization - sync config to store
     const response = await api.getConfig()
     if (response.success && response.data) {
-      const loadedConfig = response.data as any
+      const loadedConfig = response.data as HaloConfig
       setConfig(loadedConfig)  // Sync config to store (was missing, causing empty apiKey in settings)
-      if (loadedConfig.isFirstLaunch || !loadedConfig.api.apiKey) {
+      // Show setup if first launch or no AI source configured
+      if (loadedConfig.isFirstLaunch || !hasAnyAISource(loadedConfig)) {
         setView('setup')
       } else {
         setView('home')
@@ -431,7 +433,7 @@ export default function App() {
       case 'gitBashSetup':
         return <GitBashSetup onComplete={handleGitBashSetupComplete} />
       case 'setup':
-        return <ApiSetup />
+        return <SetupFlow />
       case 'home':
         return (
           <Suspense fallback={<PageLoader />}>

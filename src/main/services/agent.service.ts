@@ -56,6 +56,85 @@ import {
   AI_BROWSER_SYSTEM_PROMPT,
   createAIBrowserMcpServer
 } from './ai-browser'
+import { getAISourceManager } from './ai-sources'
+
+/**
+ * API credentials for agent requests
+ * Unified structure for custom API and OAuth sources
+ */
+interface ApiCredentials {
+  baseUrl: string
+  apiKey: string
+  model: string
+  provider: 'anthropic' | 'openai' | 'oauth'
+  /** Custom headers for OAuth providers */
+  customHeaders?: Record<string, string>
+  /** API type for OpenAI compatible providers */
+  apiType?: 'chat_completions' | 'responses'
+}
+
+/**
+ * Get API credentials based on current aiSources configuration
+ * This is the central place that determines which API to use
+ * Now uses AISourceManager for unified access
+ */
+async function getApiCredentials(config: ReturnType<typeof getConfig>): Promise<ApiCredentials> {
+  const manager = getAISourceManager()
+  await manager.ensureInitialized()
+
+  // Debug logging
+  console.log('[AgentService] getApiCredentials called')
+
+  // Ensure token is valid for OAuth providers
+  const aiSources = (config as any).aiSources
+  const currentSource = aiSources?.current || 'custom'
+
+  console.log('[AgentService] currentSource:', currentSource)
+  console.log('[AgentService] aiSources:', JSON.stringify({
+    current: aiSources?.current,
+    hasCustom: !!aiSources?.custom?.apiKey
+  }, null, 2))
+
+  // Check if current source is an OAuth provider (not 'custom')
+  if (currentSource !== 'custom') {
+    console.log('[AgentService] Checking OAuth token validity for:', currentSource)
+    const tokenResult = await manager.ensureValidToken(currentSource)
+    console.log('[AgentService] Token check result:', tokenResult.success)
+    if (!tokenResult.success) {
+      throw new Error('OAuth token expired or invalid. Please login again.')
+    }
+  }
+
+  // Get backend config from manager
+  console.log('[AgentService] Calling manager.getBackendConfig()')
+  const backendConfig = manager.getBackendConfig()
+  console.log('[AgentService] backendConfig:', backendConfig ? { url: backendConfig.url, model: backendConfig.model, hasKey: !!backendConfig.key } : null)
+
+  if (!backendConfig) {
+    throw new Error('No AI source configured. Please configure an API key or login.')
+  }
+
+  // Determine provider type
+  let provider: 'anthropic' | 'openai' | 'oauth'
+
+  if (currentSource !== 'custom') {
+    provider = 'oauth'
+    console.log(`[Agent] Using OAuth provider ${currentSource} via AISourceManager`)
+  } else {
+    // Custom API - check provider from config
+    provider = aiSources?.custom?.provider === 'openai' ? 'openai' : 'anthropic'
+    console.log(`[Agent] Using custom API (${provider}) via AISourceManager`)
+  }
+
+  return {
+    baseUrl: backendConfig.url,
+    apiKey: backendConfig.key,
+    model: backendConfig.model || 'claude-opus-4-5-20251101',
+    provider,
+    customHeaders: backendConfig.headers,
+    apiType: backendConfig.apiType
+  }
+}
 
 // Cached path to headless Electron binary (outside .app bundle to prevent Dock icon on macOS)
 let headlessElectronPath: string | null = null
@@ -254,15 +333,20 @@ type V2SDKSession = {
 }
 
 function inferOpenAIWireApi(apiUrl: string): 'responses' | 'chat_completions' {
+  // 1. Check environment variable override
   const envApiType = process.env.HALO_OPENAI_API_TYPE || process.env.HALO_OPENAI_WIRE_API
   if (envApiType) {
     const v = envApiType.toLowerCase()
     if (v.includes('response')) return 'responses'
     if (v.includes('chat')) return 'chat_completions'
   }
-  if (apiUrl && apiUrl.includes('/responses')) return 'responses'
-  // Default to responses (OpenAI new API format)
-  return 'responses'
+  // 2. Infer from URL
+  if (apiUrl) {
+    if (apiUrl.includes('/chat/completions') || apiUrl.includes('/chat_completions')) return 'chat_completions'
+    if (apiUrl.includes('/responses')) return 'responses'
+  }
+  // 3. Default to chat_completions (most common for third-party providers)
+  return 'chat_completions'
 }
 
 /**
@@ -457,28 +541,34 @@ export async function ensureSessionWarm(
   // Create abortController - consistent with sendMessage
   const abortController = new AbortController()
 
-  // OpenAI compatibility mode: enable local Router for protocol conversion only when provider=openai
-  // - config.api.apiUrl/apiKey still holds user's "real OpenAI-compatible backend" info
-  // - ANTHROPIC_* injected to Claude Code points to local Router
-  // - Pass a fake Claude model name to CC (CC may validate model must start with claude-*)
-  //   Real model is in encodeBackendConfig, Router uses it for requests
-  let anthropicBaseUrl = config.api.apiUrl
-  let anthropicApiKey = config.api.apiKey
-  let sdkModel = config.api.model || 'claude-opus-4-5-20251101'
-  if (config.api.provider === 'openai') {
+  // Get API credentials based on current aiSources configuration
+  const credentials = await getApiCredentials(config)
+  console.log(`[Agent] Session warm using: ${credentials.provider}, model: ${credentials.model}`)
 
+  // Route through OpenAI compat router for non-Anthropic providers
+  let anthropicBaseUrl = credentials.baseUrl
+  let anthropicApiKey = credentials.apiKey
+  let sdkModel = credentials.model || 'claude-opus-4-5-20251101'
+
+  // For non-Anthropic providers (openai or oauth), use the OpenAI compat router
+  if (credentials.provider !== 'anthropic') {
     const router = await ensureOpenAICompatRouter({ debug: false })
     anthropicBaseUrl = router.baseUrl
-    const apiType = inferOpenAIWireApi(config.api.apiUrl)
+
+    // Use apiType from credentials (set by provider), fallback to inference
+    const apiType = credentials.apiType
+      || (credentials.provider === 'oauth' ? 'chat_completions' : inferOpenAIWireApi(credentials.baseUrl))
+
     anthropicApiKey = encodeBackendConfig({
-      url: config.api.apiUrl,
-      key: config.api.apiKey,
-      model: config.api.model,  // Real model passed to Router
-      ...(apiType ? { apiType } : {})
+      url: credentials.baseUrl,
+      key: credentials.apiKey,
+      model: credentials.model,
+      headers: credentials.customHeaders,
+      apiType
     })
     // Pass a fake Claude model to CC for normal request handling
     sdkModel = 'claude-sonnet-4-20250514'
-    console.log(`[Agent] OpenAI provider enabled (warm): routing via ${anthropicBaseUrl}`)
+    console.log(`[Agent] ${credentials.provider} provider enabled (warm): routing via ${anthropicBaseUrl}, apiType=${apiType}`)
   }
 
   const sdkOptions: Record<string, any> = {
@@ -508,7 +598,7 @@ export async function ensureSessionWarm(
     systemPrompt: {
       type: 'preset' as const,
       preset: 'claude_code' as const,
-      append: buildSystemPromptAppend(workDir)
+      append: buildSystemPromptAppend(workDir, credentials.model)
     },
     maxTurns: 50,
     allowedTools: ['Read', 'Write', 'Edit', 'Grep', 'Glob', 'Bash'],
@@ -571,8 +661,9 @@ export function closeAllV2Sessions(): void {
  * Invalidate all V2 sessions due to API config change.
  * Called by config.service via callback when API config changes.
  *
- * Sessions are closed immediately, but users are not interrupted.
- * New sessions will be created with updated config on next message.
+ * IMPORTANT: Sessions with active conversations are SKIPPED to avoid interrupting users.
+ * They will be closed when the conversation completes naturally.
+ * Idle sessions are closed immediately.
  */
 function invalidateAllSessions(): void {
   const count = v2Sessions.size
@@ -583,17 +674,28 @@ function invalidateAllSessions(): void {
 
   console.log(`[Agent] Invalidating ${count} sessions due to API config change`)
 
+  let closedCount = 0
+  let skippedCount = 0
+
   for (const [convId, info] of Array.from(v2Sessions.entries())) {
+    // Skip sessions with active conversations - don't interrupt ongoing chats
+    if (activeSessions.has(convId)) {
+      console.log(`[Agent] Skipping active session: ${convId}`)
+      skippedCount++
+      continue
+    }
+
     try {
-      console.log(`[Agent] Closing session: ${convId}`)
+      console.log(`[Agent] Closing idle session: ${convId}`)
       info.session.close()
+      v2Sessions.delete(convId)
+      closedCount++
     } catch (e) {
       console.error(`[Agent] Error closing session ${convId}:`, e)
     }
   }
 
-  v2Sessions.clear()
-  console.log('[Agent] All sessions invalidated, will use new config on next message')
+  console.log(`[Agent] Sessions invalidated: ${closedCount} closed, ${skippedCount} active (skipped)`)
 }
 
 // Register for API config change notifications
@@ -700,7 +802,10 @@ export async function testMcpConnections(mainWindow?: BrowserWindow | null): Pro
 
   try {
     const config = getConfig()
-    if (!config?.api?.apiKey) {
+
+    // Get API credentials based on current aiSources configuration
+    const credentials = await getApiCredentials(config)
+    if (!credentials.apiKey && credentials.provider !== 'oauth') {
       return { success: false, servers: [], error: 'API key not configured' }
     }
 
@@ -718,23 +823,29 @@ export async function testMcpConnections(mainWindow?: BrowserWindow | null): Pro
     // Use the same electron path as sendMessage (prevents Dock icon on macOS)
     const electronPath = getHeadlessElectronPath()
 
-    // Handle OpenAI compatible mode (same as sendMessage)
-    let anthropicBaseUrl = config.api.apiUrl
-    let anthropicApiKey = config.api.apiKey
-    let sdkModel = config.api.model || 'claude-sonnet-4-20250514'
+    // Route through OpenAI compat router for non-Anthropic providers
+    let anthropicBaseUrl = credentials.baseUrl
+    let anthropicApiKey = credentials.apiKey
+    let sdkModel = credentials.model || 'claude-sonnet-4-20250514'
 
-    if (config.api.provider === 'openai') {
+    // For non-Anthropic providers (openai or oauth), use the OpenAI compat router
+    if (credentials.provider !== 'anthropic') {
       const router = await ensureOpenAICompatRouter({ debug: false })
       anthropicBaseUrl = router.baseUrl
-      const apiType = inferOpenAIWireApi(config.api.apiUrl)
+
+      // Use apiType from credentials (set by provider), fallback to inference
+      const apiType = credentials.apiType
+        || (credentials.provider === 'oauth' ? 'chat_completions' : inferOpenAIWireApi(credentials.baseUrl))
+
       anthropicApiKey = encodeBackendConfig({
-        url: config.api.apiUrl,
-        key: config.api.apiKey,
-        model: config.api.model,
-        ...(apiType ? { apiType } : {})
+        url: credentials.baseUrl,
+        key: credentials.apiKey,
+        model: credentials.model,
+        headers: credentials.customHeaders,
+        apiType
       })
       sdkModel = 'claude-sonnet-4-20250514'
-      console.log(`[Agent] MCP test: OpenAI provider enabled via ${anthropicBaseUrl}`)
+      console.log(`[Agent] MCP test: ${credentials.provider} provider enabled via ${anthropicBaseUrl}, apiType=${apiType}`)
     }
 
     console.log('[Agent] MCP test config:', JSON.stringify(enabledMcpServers, null, 2))
@@ -1003,26 +1114,34 @@ export async function sendMessage(
   const config = getConfig()
   const workDir = getWorkingDir(spaceId)
 
-  // OpenAI compatibility mode: enable local Router for protocol conversion only when provider=openai
-  // Same as ensureSessionWarm(), config storage values are not modified here
-  // Pass a fake Claude model name to CC (CC may validate model must start with claude-*)
-  // Real model is in encodeBackendConfig, Router uses it for requests
-  let anthropicBaseUrl = config.api.apiUrl
-  let anthropicApiKey = config.api.apiKey
-  let sdkModel = config.api.model || 'claude-opus-4-5-20251101'
-  if (config.api.provider === 'openai') {
+  // Get API credentials based on current aiSources configuration
+  const credentials = await getApiCredentials(config)
+  console.log(`[Agent] sendMessage using: ${credentials.provider}, model: ${credentials.model}`)
+
+  // Route through OpenAI compat router for non-Anthropic providers
+  let anthropicBaseUrl = credentials.baseUrl
+  let anthropicApiKey = credentials.apiKey
+  let sdkModel = credentials.model || 'claude-opus-4-5-20251101'
+
+  // For non-Anthropic providers (openai or oauth), use the OpenAI compat router
+  if (credentials.provider !== 'anthropic') {
     const router = await ensureOpenAICompatRouter({ debug: false })
     anthropicBaseUrl = router.baseUrl
-    const apiType = inferOpenAIWireApi(config.api.apiUrl)
+
+    // Use apiType from credentials (set by provider), fallback to inference
+    const apiType = credentials.apiType
+      || (credentials.provider === 'oauth' ? 'chat_completions' : inferOpenAIWireApi(credentials.baseUrl))
+
     anthropicApiKey = encodeBackendConfig({
-      url: config.api.apiUrl,
-      key: config.api.apiKey,
-      model: config.api.model,  // Real model passed to Router
-      ...(apiType ? { apiType } : {})
+      url: credentials.baseUrl,
+      key: credentials.apiKey,
+      model: credentials.model,
+      headers: credentials.customHeaders,
+      apiType
     })
     // Pass a fake Claude model to CC for normal request handling
     sdkModel = 'claude-sonnet-4-20250514'
-    console.log(`[Agent] OpenAI provider enabled: routing via ${anthropicBaseUrl}`)
+    console.log(`[Agent] ${credentials.provider} provider enabled: routing via ${anthropicBaseUrl}, apiType=${apiType}`)
   }
 
   // Get conversation for session resumption
@@ -1097,7 +1216,8 @@ export async function sendMessage(
         type: 'preset' as const,
         preset: 'claude_code' as const,
         // Append AI Browser system prompt if enabled
-        append: buildSystemPromptAppend(workDir) + (aiBrowserEnabled ? AI_BROWSER_SYSTEM_PROMPT : '')
+        // Pass actual model name so AI knows what model it's running on
+        append: buildSystemPromptAppend(workDir, credentials.model) + (aiBrowserEnabled ? AI_BROWSER_SYSTEM_PROMPT : '')
       },
       maxTurns: 50,
       allowedTools: ['Read', 'Write', 'Edit', 'Grep', 'Glob', 'Bash'],
@@ -1151,6 +1271,14 @@ export async function sendMessage(
     // Dynamic runtime parameter adjustment (via SDK patch)
     // These can be changed without rebuilding the session
     try {
+      // Set model dynamically (allows model switching without session rebuild)
+      // Note: For OpenAI-compat/OAuth providers, model is encoded in apiKey and always fresh
+      // This setModel call is mainly for pure Anthropic API sessions
+      if (v2Session.setModel) {
+        await v2Session.setModel(sdkModel)
+        console.log(`[Agent][${conversationId}] Model set: ${sdkModel}`)
+      }
+
       // Set thinking tokens dynamically
       if (v2Session.setMaxThinkingTokens) {
         await v2Session.setMaxThinkingTokens(thinkingEnabled ? 10240 : null)
@@ -1326,7 +1454,8 @@ export async function sendMessage(
       }
 
       // Parse SDK message into Thought and send to renderer
-      const thought = parseSDKMessage(sdkMessage)
+      // Pass credentials.model to display the user's actual configured model
+      const thought = parseSDKMessage(sdkMessage, credentials.model)
 
       if (thought) {
         // Accumulate thought in backend session (Single Source of Truth)
@@ -1653,17 +1782,21 @@ export function getSessionState(conversationId: string): {
 }
 
 // Parse SDK message into a Thought object
-function parseSDKMessage(message: any): Thought | null {
+// displayModel: The actual model name to display (user-configured model, not SDK's internal model)
+function parseSDKMessage(message: any, displayModel?: string): Thought | null {
   const timestamp = new Date().toISOString()
   const generateId = () => `thought-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
   // System initialization
   if (message.type === 'system') {
     if (message.subtype === 'init') {
+      // Use displayModel (user's configured model) instead of SDK's internal model
+      // This ensures users see the actual model they configured, not the spoofed Claude model
+      const modelName = displayModel || message.model || 'claude'
       return {
         id: generateId(),
         type: 'system',
-        content: `Connected | Model: ${message.model || 'claude'}`,
+        content: `Connected | Model: ${modelName}`,
         timestamp
       }
     }
@@ -1765,9 +1898,12 @@ function parseSDKMessage(message: any): Thought | null {
 }
 
 // Build system prompt append - minimal context, preserve Claude Code's native behavior
-function buildSystemPromptAppend(workDir: string): string {
+// modelInfo: The actual model being used (user-configured, may differ from SDK's internal model)
+function buildSystemPromptAppend(workDir: string, modelInfo?: string): string {
+  const modelLine = modelInfo ? `You are powered by ${modelInfo}.` : ''
   return `
 You are Halo, an AI assistant that helps users accomplish real work.
+${modelLine}
 All created files will be saved in the user's workspace. Current workspace: ${workDir}.
 `
 }

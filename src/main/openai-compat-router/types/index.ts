@@ -30,6 +30,10 @@ export interface BackendConfig {
   url: string
   key: string
   model?: string
+  /** Custom headers to send with requests (used by OAuth providers) */
+  headers?: Record<string, string>
+  /** API type override: 'chat_completions' or 'responses' */
+  apiType?: 'chat_completions' | 'responses'
 }
 
 /**

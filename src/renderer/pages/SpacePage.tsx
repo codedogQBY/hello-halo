@@ -26,6 +26,7 @@ import { ConversationList } from '../components/chat/ConversationList'
 import { ChatHistoryPanel } from '../components/chat/ChatHistoryPanel'
 import { SpaceIcon } from '../components/icons/ToolIcons'
 import { Header } from '../components/layout/Header'
+import { ModelSelector } from '../components/layout/ModelSelector'
 import { ContentCanvas, CanvasToggleButton } from '../components/canvas'
 import { GitBashWarningBanner } from '../components/setup/GitBashWarningBanner'
 import { api } from '../api'
@@ -352,6 +353,8 @@ export function SpacePage() {
                   onDelete={handleDeleteConversation}
                   onRename={handleRenameConversation}
                   spaceName={currentSpace.isTemp ? t('Halo Space') : currentSpace.name}
+                  onToggleSidebar={() => setShowConversationList(!showConversationList)}
+                  isSidebarVisible={showConversationList}
                 />
               </div>
             )}
@@ -371,20 +374,11 @@ export function SpacePage() {
               <span className="hidden sm:inline">{t('New conversation')}</span>
             </button>
 
-            <button
-              onClick={() => setShowConversationList(!showConversationList)}
-              className={`p-1.5 rounded-lg transition-colors ${
-                showConversationList ? 'bg-primary/20 text-primary' : 'hover:bg-secondary'
-              }`}
-              title={t('Sidebar')}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-              </svg>
-            </button>
-
             {/* Search Icon */}
             <SearchIcon onClick={openSearch} isInSpace={true} />
+
+            {/* Model Selector */}
+            <ModelSelector />
 
             <button
               onClick={() => setView('settings')}

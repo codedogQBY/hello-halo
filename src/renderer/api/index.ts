@@ -50,6 +50,52 @@ export const api = {
     disconnectWebSocket()
   },
 
+  // ===== Generic Auth (provider-agnostic) =====
+  authGetProviders: async (): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.authGetProviders()
+    }
+    return httpRequest('GET', '/api/auth/providers')
+  },
+
+  authStartLogin: async (providerType: string): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.authStartLogin(providerType)
+    }
+    return httpRequest('POST', '/api/auth/start-login', { providerType })
+  },
+
+  authCompleteLogin: async (providerType: string, state: string): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.authCompleteLogin(providerType, state)
+    }
+    return httpRequest('POST', '/api/auth/complete-login', { providerType, state })
+  },
+
+  authRefreshToken: async (providerType: string): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.authRefreshToken(providerType)
+    }
+    return httpRequest('POST', '/api/auth/refresh-token', { providerType })
+  },
+
+  authCheckToken: async (providerType: string): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.authCheckToken(providerType)
+    }
+    return httpRequest('GET', `/api/auth/check-token?providerType=${providerType}`)
+  },
+
+  authLogout: async (providerType: string): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.authLogout(providerType)
+    }
+    return httpRequest('POST', '/api/auth/logout', { providerType })
+  },
+
+  onAuthLoginProgress: (callback: (data: { provider: string; status: string }) => void) =>
+    onEvent('auth:login-progress', callback),
+
   // ===== Config =====
   getConfig: async (): Promise<ApiResponse> => {
     if (isElectron()) {
@@ -74,6 +120,13 @@ export const api = {
       return window.halo.validateApi(apiKey, apiUrl, provider)
     }
     return httpRequest('POST', '/api/config/validate', { apiKey, apiUrl, provider })
+  },
+
+  refreshAISourcesConfig: async (): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.refreshAISourcesConfig()
+    }
+    return httpRequest('POST', '/api/config/refresh-ai-sources')
   },
 
   // ===== Space =====

@@ -5,6 +5,7 @@
 import { create } from 'zustand'
 import { api } from '../api'
 import type { HaloConfig, AppView, McpServerStatus } from '../types'
+import { hasAnyAISource } from '../types'
 
 // Git Bash installation progress
 interface GitBashInstallProgress {
@@ -205,9 +206,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ config })
 
         // Determine initial view based on config
-        if (config.isFirstLaunch || !config.api.apiKey) {
-          // Show setup if first launch or no API key
-          console.log('[Store] First launch or no API key, showing setup')
+        // Show setup if first launch or no AI source configured (OAuth or Custom API)
+        if (config.isFirstLaunch || !hasAnyAISource(config)) {
+          console.log('[Store] First launch or no AI source, showing setup')
           set({ view: 'setup' })
         } else {
           // Go to home

@@ -17,8 +17,12 @@ out
 tests/e2e/results/
 .claude/
 
-# Local docs (not for public)
+# Local docs
 local_docs/
+
+# Local plugins
+halo-local/
+product.json
 
 # Local deploy scripts
 scripts/deploy_local_*.sh
@@ -33,3 +37,5 @@ website/
 # OS files
 .DS_Store
 RELEASE_NOTES.md
+# temp
+src/main/services/agent/*
