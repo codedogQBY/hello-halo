@@ -80,7 +80,12 @@ export function SettingsPage() {
 
   // OAuth providers state (dynamic from product.json)
   const [authProviders, setAuthProviders] = useState<AuthProviderConfig[]>([])
-  const [loginState, setLoginState] = useState<{ provider: string; status: string } | null>(null)
+  const [loginState, setLoginState] = useState<{
+    provider: string
+    status: string
+    userCode?: string
+    verificationUri?: string
+  } | null>(null)
   const [loggingOutProvider, setLoggingOutProvider] = useState<string | null>(null)
 
   // Custom API local state for editing
@@ -348,9 +353,21 @@ export function SettingsPage() {
         return
       }
 
-      // Get state from start result
-      const { state } = result.data as { loginUrl: string; state: string }
-      setLoginState({ provider: providerType, status: t('Waiting for login...') })
+      // Get state and device code info from start result
+      const { state, userCode, verificationUri } = result.data as {
+        loginUrl: string
+        state: string
+        userCode?: string
+        verificationUri?: string
+      }
+
+      // Update login state with device code info if available
+      setLoginState({
+        provider: providerType,
+        status: userCode ? t('Enter the code in your browser') : t('Waiting for login...'),
+        userCode,
+        verificationUri
+      })
 
       // Complete login - this polls for the token until user completes login
       const completeResult = await api.authCompleteLogin(providerType, state)
@@ -581,6 +598,41 @@ export function SettingsPage() {
                             <p className="text-xs text-muted-foreground">{loginState?.status}</p>
                           </div>
                         </div>
+
+                        {/* Device code display for OAuth Device Code flow */}
+                        {loginState?.userCode && loginState?.verificationUri && (
+                          <div className="mt-4 p-4 bg-background border border-border rounded-lg">
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {t('Visit this URL to login:')}
+                            </p>
+                            <a
+                              href={loginState.verificationUri}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline font-mono text-xs"
+                            >
+                              {loginState.verificationUri}
+                            </a>
+                            <p className="text-xs text-muted-foreground mt-3 mb-1">
+                              {t('Enter this code:')}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <code className="text-lg font-bold font-mono tracking-widest bg-muted px-3 py-1 rounded border border-border select-all">
+                                {loginState.userCode}
+                              </code>
+                              <button
+                                onClick={() => navigator.clipboard.writeText(loginState.userCode!)}
+                                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
+                                title={t('Copy code')}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )
                   } else {

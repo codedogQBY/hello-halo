@@ -20,7 +20,7 @@ process.on('uncaughtException', (error) => {
 // GUI apps don't inherit shell environment variables (.zshrc, .bash_profile, etc.)
 // This ensures tools like git, node, npm are discoverable
 // Executed after page load to avoid blocking startup
-import fixPath from 'fix-path'
+// Note: fix-path is ESM-only, loaded dynamically to support both CJS and ESM builds
 
 import { app, shell, BrowserWindow, Menu } from 'electron'
 
@@ -236,8 +236,10 @@ function createWindow(): void {
   })
 
   // Fix PATH after page loads (avoid blocking startup)
-  mainWindow.webContents.on('did-finish-load', () => {
+  mainWindow.webContents.on('did-finish-load', async () => {
     if (process.platform !== 'win32') {
+      // Dynamic import for ESM-only fix-path module
+      const { default: fixPath } = await import('fix-path')
       fixPath()
     }
   })

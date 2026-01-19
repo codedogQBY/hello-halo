@@ -161,6 +161,10 @@ export interface OAuthLoginState {
 export interface OAuthStartResult {
   loginUrl: string
   state: string
+  /** User code for device code flow (e.g., GitHub Copilot) */
+  userCode?: string
+  /** Verification URL for device code flow */
+  verificationUri?: string
 }
 
 /**

@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Globe, ChevronDown, ChevronRight, MessageSquare, Wrench, Key, Cloud, Server, Shield, Lock, Zap, LogIn, User, type LucideIcon } from 'lucide-react'
+import { Globe, ChevronDown, ChevronRight, MessageSquare, Wrench, Key, Cloud, Server, Shield, Lock, Zap, LogIn, User, Github, type LucideIcon } from 'lucide-react'
 import { useTranslation, setLanguage, getCurrentLanguage, SUPPORTED_LOCALES, type LocaleCode } from '../../i18n'
 import { api } from '../../api'
 
@@ -21,7 +21,7 @@ interface AuthProviderConfig {
   displayName: LocalizedText
   description: LocalizedText
   icon: string
-  iconColor: string
+  iconBgColor: string  // Hex color like #24292e
   recommended: boolean
   enabled: boolean
 }
@@ -58,18 +58,17 @@ const iconMap: Record<string, LucideIcon> = {
   'lock': Lock,
   'zap': Zap,
   'message-square': MessageSquare,
-  'wrench': Wrench
+  'wrench': Wrench,
+  'github': Github
 }
 
 /**
- * Map color names to Tailwind classes
+ * Convert hex color to RGBA with opacity
  */
-const colorMap: Record<string, { bg: string; text: string }> = {
-  blue: { bg: 'bg-blue-500/10', text: 'text-blue-500' },
-  orange: { bg: 'bg-orange-500/10', text: 'text-orange-500' },
-  green: { bg: 'bg-green-500/10', text: 'text-green-500' },
-  purple: { bg: 'bg-purple-500/10', text: 'text-purple-500' },
-  red: { bg: 'bg-red-500/10', text: 'text-red-500' }
+function hexToRgba(hex: string, alpha: number = 0.15): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return `rgba(128, 128, 128, ${alpha})`
+  return `rgba(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}, ${alpha})`
 }
 
 export function LoginSelector({ onSelectProvider, onSelectCustom }: LoginSelectorProps) {
@@ -98,7 +97,7 @@ export function LoginSelector({ onSelectProvider, onSelectCustom }: LoginSelecto
               displayName: { en: 'Custom API', 'zh-CN': '自定义 API' },
               description: { en: 'Use your own API Key', 'zh-CN': '使用自己的 API Key' },
               icon: 'wrench',
-              iconColor: 'orange',
+              iconBgColor: '#da7756',
               recommended: true,
               enabled: true
             }
@@ -113,7 +112,7 @@ export function LoginSelector({ onSelectProvider, onSelectCustom }: LoginSelecto
             displayName: { en: 'Custom API', 'zh-CN': '自定义 API' },
             description: { en: 'Use your own API Key', 'zh-CN': '使用自己的 API Key' },
             icon: 'wrench',
-            iconColor: 'orange',
+            iconBgColor: '#da7756',
             recommended: true,
             enabled: true
           }
@@ -145,11 +144,6 @@ export function LoginSelector({ onSelectProvider, onSelectCustom }: LoginSelecto
   // Get icon component for a provider
   const getIcon = (iconName: string): LucideIcon => {
     return iconMap[iconName] || Wrench
-  }
-
-  // Get color classes for a provider
-  const getColors = (colorName: string) => {
-    return colorMap[colorName] || colorMap.orange
   }
 
   return (
@@ -228,7 +222,8 @@ export function LoginSelector({ onSelectProvider, onSelectCustom }: LoginSelecto
             // Dynamic provider cards
             providers.map((provider) => {
               const IconComponent = getIcon(provider.icon)
-              const colors = getColors(provider.iconColor)
+              const bgColor = hexToRgba(provider.iconBgColor, 0.15)
+              const textColor = provider.iconBgColor
 
               return (
                 <button
@@ -238,8 +233,11 @@ export function LoginSelector({ onSelectProvider, onSelectCustom }: LoginSelecto
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-lg ${colors.bg} flex items-center justify-center`}>
-                        <IconComponent className={`w-5 h-5 ${colors.text}`} />
+                      <div
+                        className="w-10 h-10 rounded-lg flex items-center justify-center"
+                        style={{ backgroundColor: bgColor }}
+                      >
+                        <IconComponent className="w-5 h-5" style={{ color: textColor }} />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">

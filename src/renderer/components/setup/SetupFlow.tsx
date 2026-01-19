@@ -14,6 +14,12 @@ import { Loader2 } from 'lucide-react'
 
 type SetupStep = 'select' | 'oauth-waiting' | 'custom'
 
+/** Device code info for display in UI */
+interface DeviceCodeInfo {
+  userCode: string
+  verificationUri: string
+}
+
 export function SetupFlow() {
   const { t } = useTranslation()
   const { setView, setConfig } = useAppStore()
@@ -22,6 +28,7 @@ export function SetupFlow() {
   const [oauthState, setOauthState] = useState<string | null>(null)
   const [loginStatus, setLoginStatus] = useState<string>('')
   const [error, setError] = useState<string | null>(null)
+  const [deviceCodeInfo, setDeviceCodeInfo] = useState<DeviceCodeInfo | null>(null)
 
   // Handle OAuth provider login (generic)
   const handleSelectProvider = async (providerType: string) => {
@@ -29,6 +36,7 @@ export function SetupFlow() {
     setCurrentProvider(providerType)
     setStep('oauth-waiting')
     setLoginStatus(t('Opening login page...'))
+    setDeviceCodeInfo(null)
 
     try {
       // Start the login flow - this opens the browser
@@ -37,9 +45,21 @@ export function SetupFlow() {
         throw new Error(result.error || 'Failed to start login')
       }
 
-      const { state } = result.data as { loginUrl: string; state: string }
+      const { state, userCode, verificationUri } = result.data as {
+        loginUrl: string
+        state: string
+        userCode?: string
+        verificationUri?: string
+      }
       setOauthState(state)
-      setLoginStatus(t('Waiting for login...'))
+
+      // If device code flow, show user code and verification URL
+      if (userCode && verificationUri) {
+        setDeviceCodeInfo({ userCode, verificationUri })
+        setLoginStatus(t('Enter the code in your browser'))
+      } else {
+        setLoginStatus(t('Waiting for login...'))
+      }
 
       // Complete the login - this polls for the token
       const completeResult = await api.authCompleteLogin(providerType, state)
@@ -111,9 +131,47 @@ export function SetupFlow() {
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <p className="text-muted-foreground">{loginStatus}</p>
-          <p className="text-sm text-muted-foreground/70">
-            {t('Please complete login in your browser')}
-          </p>
+
+          {/* Device code display for OAuth Device Code flow */}
+          {deviceCodeInfo && (
+            <div className="mt-4 p-6 bg-muted/50 border border-border rounded-lg text-center">
+              <p className="text-sm text-muted-foreground mb-2">
+                {t('Visit this URL to login:')}
+              </p>
+              <a
+                href={deviceCodeInfo.verificationUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline font-mono text-sm"
+              >
+                {deviceCodeInfo.verificationUri}
+              </a>
+              <p className="text-sm text-muted-foreground mt-4 mb-2">
+                {t('Enter this code:')}
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <code className="text-2xl font-bold font-mono tracking-widest bg-background px-4 py-2 rounded border border-border select-all">
+                  {deviceCodeInfo.userCode}
+                </code>
+                <button
+                  onClick={() => navigator.clipboard.writeText(deviceCodeInfo.userCode)}
+                  className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+                  title={t('Copy code')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!deviceCodeInfo && (
+            <p className="text-sm text-muted-foreground/70">
+              {t('Please complete login in your browser')}
+            </p>
+          )}
         </div>
 
         {/* Error message */}

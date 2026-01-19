@@ -30,6 +30,7 @@ import type {
 } from '../../../shared/types'
 import { getConfig, saveConfig } from '../config.service'
 import { getCustomProvider } from './providers/custom.provider'
+import { getGitHubCopilotProvider } from './providers/github-copilot.provider'
 import { loadAuthProvidersAsync, isOAuthProvider as isOAuthProviderCheck, type LoadedProvider } from './auth-loader'
 import { encryptString, decryptString, decryptTokens } from '../secure-storage.service'
 
@@ -56,6 +57,7 @@ class AISourceManager {
   constructor() {
     // Register built-in providers immediately
     this.registerProvider(getCustomProvider())
+    this.registerProvider(getGitHubCopilotProvider())
 
     // Start async initialization (optional providers + dynamic loading)
     this.initPromise = this.initializeAsync()
