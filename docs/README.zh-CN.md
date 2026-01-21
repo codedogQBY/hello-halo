@@ -256,7 +256,7 @@ npm run dev
 </p>
 
 <p align="center">
-  <img src="YOUR_PERSONAL_WECHAT_QR_CODE_URL_HERE" width="200" alt="个人微信二维码">
+  <img src="https://github.com/user-attachments/assets/500aa749-50d9-4587-986d-338b1ed899f1" width="200" alt="个人微信二维码">
 </p>
 
 ---
