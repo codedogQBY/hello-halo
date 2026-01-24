@@ -108,6 +108,9 @@ export interface OAuthSourceConfig {
 
 // Custom API source configuration (same as existing ApiConfig)
 export interface CustomSourceConfig {
+  id?: string;
+  name?: string;
+  type?: 'custom';
   provider: ApiProvider;
   apiKey: string;
   apiUrl: string;
