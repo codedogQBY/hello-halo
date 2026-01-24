@@ -163,10 +163,9 @@ export function SettingsPage() {
     // Refresh AI sources config
     api.refreshAISourcesConfig().then((result) => {
       if (result.success) {
-        console.log('[Settings] AI sources config refreshed')
         api.getConfig().then((configResult) => {
-          if (configResult.success) {
-            setConfig(configResult.data)
+          if (configResult.success && configResult.data) {
+            setConfig(configResult.data as HaloConfig)
           }
         })
       }
@@ -179,8 +178,8 @@ export function SettingsPage() {
         // Reload config after login completes
         setTimeout(() => {
           api.getConfig().then((configResult) => {
-            if (configResult.success) {
-              setConfig(configResult.data)
+            if (configResult.success && configResult.data) {
+              setConfig(configResult.data as HaloConfig)
             }
           })
           setLoginState(null)
@@ -225,10 +224,8 @@ export function SettingsPage() {
   }, [remoteStatus?.enabled, remoteStatus?.tunnel.url])
 
   const loadRemoteStatus = async () => {
-    console.log('[Settings] loadRemoteStatus called')
     try {
       const response = await api.getRemoteStatus()
-      console.log('[Settings] getRemoteStatus response:', response)
       if (response.success && response.data) {
         setRemoteStatus(response.data as RemoteAccessStatus)
       }
@@ -260,7 +257,6 @@ export function SettingsPage() {
       setIsEnablingRemote(true)
       try {
         const response = await api.enableRemoteAccess()
-        console.log('[Settings] Enable response:', response)
         if (response.success && response.data) {
           setRemoteStatus(response.data as RemoteAccessStatus)
         } else {

@@ -98,8 +98,6 @@ export function ModelSelector() {
 
   // Debug config
   const aiSources = config.aiSources || { current: 'custom' as AISourceType }
-  console.log('[ModelSelector] aiSources:', aiSources)
-  console.log('[ModelSelector] custom config:', aiSources.custom)
 
   const currentSource = aiSources.current
   const hasCustom = !!(aiSources.custom?.apiKey)
