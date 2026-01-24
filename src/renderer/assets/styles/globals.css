@@ -104,6 +104,38 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
+  /* Prevent pull-to-refresh on mobile */
+  overscroll-behavior: none;
+}
+
+/* Safe area inset variables */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+html, body {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* #root uses inset to handle safe areas globally */
+#root {
+  position: fixed;
+  top: var(--sat);
+  right: var(--sar);
+  bottom: var(--sab);
+  left: var(--sal);
+  overflow: hidden;
+}
+
+/* For Portal modals rendered outside #root */
+.overlay-safe {
+  padding: var(--sat) var(--sar) var(--sab) var(--sal);
 }
 
 /* Custom scrollbar */
@@ -358,6 +390,33 @@ body {
 
 .animate-slide-out-top {
   animation: slide-out-top 0.2s ease-in forwards;
+}
+
+/* Bottom sheet animations for mobile */
+@keyframes slide-in-bottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-out-bottom {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+.animate-slide-in-bottom {
+  animation: slide-in-bottom 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.animate-slide-out-bottom {
+  animation: slide-out-bottom 0.25s cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
 
 /* Scale in animation for modals */

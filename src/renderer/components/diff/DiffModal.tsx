@@ -110,7 +110,7 @@ export function DiffModal({
   const hasNext = currentIndex < allFiles.length - 1
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-background/80 backdrop-blur-sm animate-fade-in"
@@ -118,7 +118,7 @@ export function DiffModal({
       />
 
       {/* Modal content */}
-      <div className="relative w-[90vw] max-w-4xl h-[80vh] bg-card border border-border rounded-xl shadow-2xl flex flex-col animate-scale-in overflow-hidden">
+      <div className="relative w-full max-w-4xl max-h-[80vh] bg-card border border-border rounded-xl shadow-2xl flex flex-col animate-scale-in overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-muted/30 shrink-0">
           {/* Left: File info */}

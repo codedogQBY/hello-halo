@@ -123,9 +123,6 @@
   "build": {
     "appId": "com.halo.app",
     "productName": "Halo",
-    "releaseInfo": {
-      "releaseNotesFile": ".release-notes-current.md"
-    },
     "afterPack": "./scripts/afterPack.cjs",
     "directories": {
       "buildResources": "resources"

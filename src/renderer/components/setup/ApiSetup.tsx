@@ -111,7 +111,7 @@ export function ApiSetup({ onBack, showBack = false }: ApiSetupProps) {
   }
 
   return (
-    <div className="h-full w-full flex flex-col items-center justify-center bg-background p-8 relative">
+    <div className="h-full w-full flex flex-col items-center justify-center bg-background p-8 relative overflow-auto">
       {/* Back Button - Top Left (when showBack is true) */}
       {showBack && onBack && (
         <div className="absolute top-6 left-6">

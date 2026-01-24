@@ -36,27 +36,7 @@ import { PanelLeftClose, PanelLeft, X, MessageSquare } from 'lucide-react'
 import { SearchIcon } from '../components/search/SearchIcon'
 import { useSearchShortcuts } from '../hooks/useSearchShortcuts'
 import { useTranslation } from '../i18n'
-// Mobile breakpoint (matches Tailwind sm: 640px)
-const MOBILE_BREAKPOINT = 640
-
-// Hook to detect mobile viewport
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.innerWidth < MOBILE_BREAKPOINT
-  })
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  return isMobile
-}
+import { useIsMobile } from '../hooks/useIsMobile'
 
 export function SpacePage() {
   const { t } = useTranslation()
@@ -333,8 +313,10 @@ export function SpacePage() {
               </svg>
             </button>
 
-            <SpaceIcon iconId={currentSpace.icon} size={22} />
-            <span className="font-medium text-sm">{currentSpace.isTemp ? 'Halo' : currentSpace.name}</span>
+            <SpaceIcon iconId={currentSpace.icon} size={22} className="flex-shrink-0" />
+            <span className="font-medium text-sm truncate max-w-[100px] sm:max-w-[200px] hidden sm:inline">
+              {currentSpace.isTemp ? 'Halo' : currentSpace.name}
+            </span>
 
             {/* Chat History Panel - integrated in header */}
             {conversations.length > 0 && (
@@ -368,8 +350,10 @@ export function SpacePage() {
               <span className="hidden sm:inline">{t('New conversation')}</span>
             </button>
 
-            {/* Search Icon */}
-            <SearchIcon onClick={openSearch} isInSpace={true} />
+            {/* Search Icon - hidden on mobile, accessible via shortcut */}
+            <div className="hidden sm:block">
+              <SearchIcon onClick={openSearch} isInSpace={true} />
+            </div>
 
             {/* Model Selector */}
             <ModelSelector />

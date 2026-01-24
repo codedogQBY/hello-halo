@@ -97,11 +97,11 @@ export function ImageViewer({ images, initialIndex = 0, onClose }: ImageViewerPr
 
   if (!currentImage) return null
 
-  // Render to document.body using Portal to ensure it's always on top
+  // Portal to body with overlay-safe for safe area
   return createPortal(
     <div
       className={`fixed inset-0 z-[9999] flex items-center justify-center
-        bg-black/90 backdrop-blur-sm
+        bg-black/90 backdrop-blur-sm overlay-safe
         transition-opacity duration-150
         ${isClosing ? 'opacity-0' : 'opacity-100 animate-fade-in'}`}
       onClick={handleClose}

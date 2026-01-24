@@ -20,6 +20,7 @@ import { useCanvasStore } from '../../stores/canvas.store'
 import { ChevronRight, FolderOpen, Monitor, LayoutGrid, FolderTree, X, Globe } from 'lucide-react'
 import { ONBOARDING_ARTIFACT_NAME } from '../onboarding/onboardingData'
 import { useTranslation } from '../../i18n'
+import { useIsMobile } from '../../hooks/useIsMobile'
 
 // Check if running in web mode
 const isWebMode = api.isRemoteMode()
@@ -33,9 +34,6 @@ const MAX_WIDTH = 400
 const DEFAULT_WIDTH = 240
 const COLLAPSED_WIDTH = 48
 
-// Mobile breakpoint (matches Tailwind sm)
-const MOBILE_BREAKPOINT = 640
-
 interface ArtifactRailProps {
   spaceId: string
   isTemp: boolean
@@ -43,25 +41,6 @@ interface ArtifactRailProps {
   // External control props for Canvas integration
   externalExpanded?: boolean        // Controlled expanded state from parent
   onExpandedChange?: (expanded: boolean) => void  // Callback when user toggles
-}
-
-// Hook to detect mobile viewport
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return window.innerWidth < MOBILE_BREAKPOINT
-  })
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
-
-  return isMobile
 }
 
 // Load initial view mode from storage
@@ -418,11 +397,11 @@ export function ArtifactRail({
   if (isMobile) {
     return (
       <>
-        {/* Floating trigger button */}
+        {/* Floating trigger button - z-[60] to stay above Canvas overlay (z-50) */}
         <button
           onClick={() => setMobileOverlayOpen(true)}
           className="
-            fixed right-0 top-1/3 z-40
+            fixed right-0 top-1/3 z-[60]
             w-10 h-14
             bg-card/90 backdrop-blur-sm
             border-l border-y border-border
@@ -443,9 +422,9 @@ export function ArtifactRail({
           )}
         </button>
 
-        {/* Overlay backdrop + panel */}
+        {/* Overlay backdrop + panel - z-[70] to stay above Canvas overlay (z-50) */}
         {mobileOverlayOpen && (
-          <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="fixed inset-0 z-[70] flex justify-end">
             {/* Backdrop */}
             <div
               className="absolute inset-0 bg-background/60 backdrop-blur-sm animate-fade-in"

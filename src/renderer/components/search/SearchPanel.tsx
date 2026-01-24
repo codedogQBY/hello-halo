@@ -281,7 +281,7 @@ export function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background border border-border rounded-lg shadow-lg w-full max-w-3xl h-[80vh] flex flex-col">
+      <div className="bg-background border border-border rounded-lg shadow-lg w-full max-w-3xl max-h-[80vh] flex flex-col">
         {/* Search Input */}
         <div className="flex items-center border-b border-border p-4 gap-3">
           <span className="text-lg text-muted-foreground">🔍</span>

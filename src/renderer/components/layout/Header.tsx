@@ -60,11 +60,11 @@ export function Header({ left, right, className = '' }: HeaderProps) {
         ${className}
       `.trim().replace(/\s+/g, ' ')}
     >
-      <div className="flex items-center gap-3 no-drag min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 no-drag min-w-0 overflow-hidden flex-1">
         {left}
       </div>
 
-      <div className="flex items-center gap-2 no-drag flex-shrink-0">
+      <div className="flex items-center gap-1 sm:gap-2 no-drag flex-shrink-0">
         {right}
       </div>
     </header>

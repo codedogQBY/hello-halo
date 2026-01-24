@@ -30,7 +30,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ defa
 // Page loading fallback - minimal spinner that matches app style
 function PageLoader() {
   return (
-    <div className="h-screen w-screen flex items-center justify-center bg-background">
+    <div className="h-full w-full flex items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
         <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         <span className="text-sm text-muted-foreground">Loading...</span>
@@ -493,7 +493,7 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-background">
+    <div className="h-full w-full overflow-hidden bg-background">
       {renderView()}
       {/* Search panel - full screen edit mode */}
       <SearchPanel isOpen={isSearchOpen} onClose={closeSearch} />
