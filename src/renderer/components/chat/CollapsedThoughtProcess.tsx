@@ -232,8 +232,8 @@ export function CollapsedThoughtProcess({ thoughts }: CollapsedThoughtProcessPro
           {/* Thought items */}
           {displayThoughts.length > 0 && (
             <div className={`${isMaximized ? 'max-h-[80vh]' : 'max-h-[300px]'} scrollbar-overlay px-3 transition-all duration-200`}>
-              {displayThoughts.map((thought) => (
-                <ThoughtItem key={thought.id} thought={thought} />
+              {displayThoughts.map((thought, index) => (
+                <ThoughtItem key={`${thought.id}-${index}`} thought={thought} />
               ))}
             </div>
           )}

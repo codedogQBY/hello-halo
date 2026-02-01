@@ -50,12 +50,28 @@ export interface AuthProviderConfig {
 }
 
 /**
+ * Update configuration for auto-updater
+ */
+export interface UpdateConfig {
+  /** Provider type: 'github' for GitHub Releases, 'generic' for custom server */
+  provider: 'github' | 'generic'
+  /** URL for generic provider (empty string = disabled) */
+  url?: string
+  /** GitHub repository owner (for github provider) */
+  owner?: string
+  /** GitHub repository name (for github provider) */
+  repo?: string
+}
+
+/**
  * Product configuration from product.json
  */
 export interface ProductConfig {
   name: string
   version: string
   authProviders: AuthProviderConfig[]
+  /** Update configuration (optional, defaults to GitHub if not specified) */
+  updateConfig?: UpdateConfig
 }
 
 /**

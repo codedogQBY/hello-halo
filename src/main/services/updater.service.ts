@@ -22,6 +22,7 @@ import { is } from '@electron-toolkit/utils'
 
 // Local imports
 import { getMainWindow } from './window.service'
+import { loadProductConfig } from './ai-sources/auth-loader'
 
 // Type imports
 const { autoUpdater } = electronUpdater
@@ -87,6 +88,28 @@ export function initAutoUpdater(): void {
     console.log('[Updater] Skipping auto-update in development mode')
     return
   }
+
+  // ========================================
+  // Check updateConfig from product.json
+  // ========================================
+  const productConfig = loadProductConfig()
+  const updateConfig = productConfig.updateConfig
+
+  if (!updateConfig) {
+    console.log('[Updater] No updateConfig in product.json, using default GitHub provider')
+  } else if (updateConfig.provider === 'generic' && !updateConfig.url) {
+    // Empty URL means updates are disabled (e.g., internal network version)
+    console.log('[Updater] updateConfig.url is empty, auto-update disabled')
+    return
+  } else if (updateConfig.provider === 'generic' && updateConfig.url) {
+    // Set custom update server URL
+    autoUpdater.setFeedURL({
+      provider: 'generic',
+      url: updateConfig.url
+    })
+    console.log('[Updater] Using custom update URL:', updateConfig.url)
+  }
+  // For 'github' provider, use default configuration from electron-builder.yml
 
   // Set up event handlers
   autoUpdater.on('checking-for-update', () => {

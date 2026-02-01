@@ -74,8 +74,8 @@ function ThoughtHistory({ thoughts }: { thoughts: Thought[] }) {
 
       {isExpanded && (
         <div className="mt-2 space-y-2 animate-slide-down">
-          {displayThoughts.map((thought) => (
-            <ThoughtItem key={thought.id} thought={thought} />
+          {displayThoughts.map((thought, index) => (
+            <ThoughtItem key={`${thought.id}-${index}`} thought={thought} />
           ))}
         </div>
       )}
