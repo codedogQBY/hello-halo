@@ -15,8 +15,14 @@ let loadPromise: Promise<CodeHighlighterPlugin> | null = null
 function loadCodePlugin(): Promise<CodeHighlighterPlugin> {
   if (!loadPromise) {
     loadPromise = import('@streamdown/code').then(m => {
-      cachedPlugin = m.code
-      return m.code
+      // Dark theme first: inline `color` uses the first theme's values,
+      // which must be readable on dark backgrounds (our default).
+      // The second theme goes into --shiki-dark CSS var for light mode.
+      const plugin = m.createCodePlugin({
+        themes: ['github-dark', 'github-light'],
+      })
+      cachedPlugin = plugin
+      return plugin
     })
   }
   return loadPromise

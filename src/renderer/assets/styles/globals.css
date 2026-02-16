@@ -260,6 +260,13 @@ body {
   background: hsl(var(--muted-foreground) / 0.4);
 }
 
+/* Light mode: Shiki themes are ['github-dark', 'github-light'].
+   Inline style `color` always uses the first (dark) theme.
+   In light mode, override with --shiki-dark which holds the light theme colors. */
+.light [data-streamdown="code-block-body"] span[style] {
+  color: var(--shiki-dark, inherit) !important;
+}
+
 /* Thought content - reduced saturation for code highlighting in dark mode */
 .thought-content .hljs {
   filter: saturate(0.6);
