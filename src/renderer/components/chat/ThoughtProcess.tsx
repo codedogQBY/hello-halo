@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { TodoCard, parseTodoInput } from '../tool/TodoCard'
 import { ToolResultViewer } from './tool-result'
+import { SkillCallDetail } from './SkillCallDetail'
 import {
   truncateText,
   getThoughtIcon,
@@ -41,7 +42,7 @@ void function _i18nActionKeys(t: (k: string) => string) {
   t('Editing {{file}}...'); t('Searching {{pattern}}...'); t('Matching {{pattern}}...');
   t('Executing {{command}}...'); t('Fetching {{url}}...'); t('Searching {{query}}...');
   t('Updating tasks...'); t('Executing {{task}}...'); t('Waiting for user response...');
-  t('Processing...'); t('Thinking...');
+  t('Processing...'); t('Thinking...'); t('Invoking skill {{skill}}...');
 }
 
 // Get human-friendly action summary for collapsed header (isThinking=true only)
@@ -69,6 +70,7 @@ function getActionSummaryData(thoughts: Thought[]): { key: string; params?: Reco
         case 'Task': return { key: 'Executing {{task}}...', params: { task: extractSearchTerm(input?.description) } }
         case 'NotebookEdit': return { key: 'Editing {{file}}...', params: { file: extractFileName(input?.notebook_path) } }
         case 'AskUserQuestion': return { key: 'Waiting for user response...' }
+        case 'Skill': return { key: 'Invoking skill {{skill}}...', params: { skill: extractSearchTerm(input?.skill) } }
         default: return { key: 'Processing...' }
       }
     }
@@ -152,7 +154,7 @@ const ThoughtItem = memo(function ThoughtItem({ thought, isLast }: { thought: Th
   const [showResult, setShowResult] = useState(true)  // Tool result collapsed by default shows summary
   const [isContentExpanded, setIsContentExpanded] = useState(false)  // For thinking content expand
   const { t } = useTranslation()
-  const color = getThoughtColor(thought.type, thought.isError)
+  const color = getThoughtColor(thought.type, thought.isError, thought.toolName)
   const Icon = getThoughtIcon(thought.type, thought.toolName)
 
   // Determine content and display mode based on thought type and streaming state
@@ -231,10 +233,10 @@ const ThoughtItem = memo(function ThoughtItem({ thought, isLast }: { thought: Th
         <div className="flex items-center gap-2 mb-1">
           <span className={`text-xs font-medium ${thought.toolResult?.isError ? 'text-amber-500' : color}`}>
             {(() => {
-              const label = getThoughtLabelKey(thought.type)
+              const label = getThoughtLabelKey(thought.type, thought.toolName)
               return label === 'AI' ? label : t(label)
             })()}
-            {thought.toolName && ` - ${thought.toolName}`}
+            {thought.toolName && thought.toolName !== 'Skill' && ` - ${thought.toolName}`}
           </span>
           {toolStatus && (
             <span className={`text-xs ${toolStatus.color}`}>
@@ -329,6 +331,14 @@ const ThoughtItem = memo(function ThoughtItem({ thought, isLast }: { thought: Th
             toolInput={thought.toolInput}
             output={thought.toolResult!.output}
             isError={thought.toolResult!.isError}
+          />
+        )}
+
+        {/* Skill call detail (expandable skill instructions) */}
+        {thought.type === 'tool_use' && thought.toolName === 'Skill' && thought.toolInput && (
+          <SkillCallDetail
+            skillId={typeof thought.toolInput.skill === 'string' ? thought.toolInput.skill : ''}
+            args={typeof thought.toolInput.args === 'string' ? thought.toolInput.args : undefined}
           />
         )}
       </div>

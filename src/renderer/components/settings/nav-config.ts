@@ -3,7 +3,7 @@
  * Data-driven navigation items for the settings page
  */
 
-import { Bot, Puzzle, Palette, Settings, Globe, Info } from 'lucide-react'
+import { Bot, Puzzle, Palette, Settings, Globe, Info, Wand } from 'lucide-react'
 import type { SettingsNavItem } from './types'
 
 /**
@@ -21,12 +21,11 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     labelKey: 'MCP',
     icon: Puzzle
   },
-  // Future: Skills section
-  // {
-  //   id: 'skills',
-  //   labelKey: 'Skills',
-  //   icon: Wand
-  // },
+  {
+    id: 'skills',
+    labelKey: 'Skills',
+    icon: Wand
+  },
   {
     id: 'appearance',
     labelKey: 'Appearance',

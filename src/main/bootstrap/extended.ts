@@ -34,6 +34,7 @@ import { getMainWindow, sendToRenderer } from '../services/window.service'
 import { initializeHealthSystem, setSessionCleanupFn } from '../services/health'
 import { closeAllV2Sessions } from '../services/agent/session-manager'
 import { registerHealthHandlers } from '../ipc/health'
+import { registerSkillsHandlers } from '../ipc/skills'
 
 /**
  * Initialize extended services after window is visible
@@ -85,6 +86,9 @@ export function initializeExtendedServices(): void {
   // Health: System health monitoring and recovery
   // Register IPC handlers for health queries from renderer
   registerHealthHandlers()
+
+  // Skills: Skill management (CRUD, import, export)
+  registerSkillsHandlers()
 
   // Windows-specific: Initialize Git Bash in background
   if (process.platform === 'win32') {

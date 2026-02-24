@@ -9,7 +9,19 @@ import type {
   HealthRecoveryResponse,
   HealthReportResponse,
   HealthExportResponse,
-  HealthCheckResponse
+  HealthCheckResponse,
+  SkillsListResponse,
+  Skill,
+  SkillValidationResult,
+  CreateSkillRequest,
+  UpdateSkillRequest,
+  ImportUrlRequest,
+  ImportFileRequest,
+  ImportGithubRequest,
+  GithubDiscoverResult,
+  BatchImportResult,
+  SkillSource,
+  SkillPermission
 } from '../shared/types'
 
 // Type definitions for exposed API
@@ -308,6 +320,25 @@ export interface HaloAPI {
   generateHealthReportText: () => Promise<IpcResponse<string>>
   exportHealthReport: (filePath?: string) => Promise<IpcResponse<HealthExportResponse>>
   runHealthCheck: () => Promise<IpcResponse<HealthCheckResponse>>
+
+  // Skills
+  listSkills: (spaceId?: string) => Promise<IpcResponse<SkillsListResponse>>
+  getSkill: (skillId: string, source: SkillSource, spaceId?: string) => Promise<IpcResponse<Skill>>
+  skillExists: (name: string, source: SkillSource, spaceId?: string) => Promise<IpcResponse<boolean>>
+  createSkill: (request: CreateSkillRequest) => Promise<IpcResponse<Skill>>
+  updateSkill: (skillId: string, request: UpdateSkillRequest) => Promise<IpcResponse<Skill>>
+  deleteSkill: (skillId: string, source: SkillSource, spaceId?: string) => Promise<IpcResponse>
+  renameSkill: (oldId: string, newId: string, source: SkillSource, spaceId?: string) => Promise<IpcResponse<Skill>>
+  toggleSkill: (skillId: string, enabled: boolean) => Promise<IpcResponse>
+  importSkillFromUrl: (request: ImportUrlRequest) => Promise<IpcResponse<Skill>>
+  importSkillFromLocal: (request: ImportFileRequest) => Promise<IpcResponse<Skill>>
+  discoverGithubSkills: (url: string) => Promise<IpcResponse<GithubDiscoverResult>>
+  importFromGithub: (request: ImportGithubRequest) => Promise<IpcResponse<BatchImportResult>>
+  exportSkill: (skillId: string, source: SkillSource, spaceId?: string) => Promise<IpcResponse<{ path: string }>>
+  validateSkill: (content: string) => Promise<IpcResponse<SkillValidationResult>>
+  getSkillPermissions: () => Promise<IpcResponse<SkillPermission[]>>
+  setSkillPermission: (permission: SkillPermission) => Promise<IpcResponse>
+  removeSkillPermission: (skillId: string, scope?: 'all' | 'invocation-only') => Promise<IpcResponse>
 }
 
 interface IpcResponse<T = unknown> {
@@ -540,6 +571,25 @@ const api: HaloAPI = {
   generateHealthReportText: () => ipcRenderer.invoke('health:generate-report-text'),
   exportHealthReport: (filePath) => ipcRenderer.invoke('health:export-report', filePath),
   runHealthCheck: () => ipcRenderer.invoke('health:run-check'),
+
+  // Skills
+  listSkills: (spaceId) => ipcRenderer.invoke('skills:list', spaceId),
+  getSkill: (skillId, source, spaceId) => ipcRenderer.invoke('skills:get', skillId, source, spaceId),
+  skillExists: (name, source, spaceId) => ipcRenderer.invoke('skills:exists', name, source, spaceId),
+  createSkill: (request) => ipcRenderer.invoke('skills:create', request),
+  updateSkill: (skillId, request) => ipcRenderer.invoke('skills:update', skillId, request),
+  deleteSkill: (skillId, source, spaceId) => ipcRenderer.invoke('skills:delete', skillId, source, spaceId),
+  renameSkill: (oldId, newId, source, spaceId) => ipcRenderer.invoke('skills:rename', oldId, newId, source, spaceId),
+  toggleSkill: (skillId, enabled) => ipcRenderer.invoke('skills:toggle', skillId, enabled),
+  importSkillFromUrl: (request) => ipcRenderer.invoke('skills:import:url', request),
+  importSkillFromLocal: (request) => ipcRenderer.invoke('skills:import:file', request),
+  discoverGithubSkills: (url) => ipcRenderer.invoke('skills:github:discover', url),
+  importFromGithub: (request) => ipcRenderer.invoke('skills:github:import', request),
+  exportSkill: (skillId, source, spaceId) => ipcRenderer.invoke('skills:export', skillId, source, spaceId),
+  validateSkill: (content) => ipcRenderer.invoke('skills:validate', content),
+  getSkillPermissions: () => ipcRenderer.invoke('skills:permissions:list'),
+  setSkillPermission: (permission) => ipcRenderer.invoke('skills:permissions:set', permission),
+  removeSkillPermission: (skillId, scope) => ipcRenderer.invoke('skills:permissions:remove', skillId, scope),
 }
 
 contextBridge.exposeInMainWorld('halo', api)

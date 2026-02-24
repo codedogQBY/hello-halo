@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { TodoCard, parseTodoInput } from '../tool/TodoCard'
 import { ToolResultViewer } from './tool-result'
+import { SkillCallDetail } from './SkillCallDetail'
 import {
   getThoughtIcon,
   getThoughtColor,
@@ -39,7 +40,7 @@ function ThoughtItem({ thought }: { thought: Thought }) {
   const [showRawJson, setShowRawJson] = useState(false)
   const [showResult, setShowResult] = useState(true)  // Default show result
   const [isContentExpanded, setIsContentExpanded] = useState(false)  // For thinking content expand
-  const color = getThoughtColor(thought.type, thought.isError)
+  const color = getThoughtColor(thought.type, thought.isError, thought.toolName)
   const Icon = getThoughtIcon(thought.type, thought.toolName)
 
   // Check if tool has result (merged tool_result)
@@ -62,10 +63,10 @@ function ThoughtItem({ thought }: { thought: Thought }) {
         <Icon size={14} className={`${color} shrink-0`} />
         <span className={`font-medium ${color} flex-1 min-w-0 truncate`}>
           {(() => {
-            const label = getThoughtLabelKey(thought.type)
+            const label = getThoughtLabelKey(thought.type, thought.toolName)
             return label === 'AI' ? label : t(label)
           })()}
-          {thought.toolName && ` - ${thought.toolName}`}
+          {thought.toolName && thought.toolName !== 'Skill' && ` - ${thought.toolName}`}
         </span>
         <span className="text-muted-foreground/40 text-[10px] shrink-0">
           {new Intl.DateTimeFormat(getCurrentLanguage(), {
@@ -147,6 +148,16 @@ function ThoughtItem({ thought }: { thought: Thought }) {
             toolInput={thought.toolInput}
             output={thought.toolResult!.output}
             isError={thought.toolResult!.isError}
+          />
+        </div>
+      )}
+
+      {/* Skill call detail */}
+      {thought.type === 'tool_use' && thought.toolName === 'Skill' && thought.toolInput && (
+        <div className="mt-1.5 ml-[22px]">
+          <SkillCallDetail
+            skillId={typeof thought.toolInput.skill === 'string' ? thought.toolInput.skill : ''}
+            args={typeof thought.toolInput.args === 'string' ? thought.toolInput.args : undefined}
           />
         </div>
       )}

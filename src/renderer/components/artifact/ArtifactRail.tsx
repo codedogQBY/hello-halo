@@ -18,7 +18,8 @@ import { useSpaceStore } from '../../stores/space.store'
 import { useOnboardingStore } from '../../stores/onboarding.store'
 import { useCanvasLifecycle } from '../../hooks/useCanvasLifecycle'
 import { useCanvasStore } from '../../stores/canvas.store'
-import { ChevronRight, FolderOpen, Monitor, LayoutGrid, FolderTree, X, Globe } from 'lucide-react'
+import { ChevronRight, FolderOpen, Monitor, LayoutGrid, FolderTree, X, Globe, Sparkles } from 'lucide-react'
+import { SkillsList } from '../skills/SkillsList'
 import { ONBOARDING_ARTIFACT_NAME } from '../onboarding/onboardingData'
 import { useTranslation } from '../../i18n'
 import { useIsMobile } from '../../hooks/useIsMobile'
@@ -108,6 +109,7 @@ export function ArtifactRail({
   }, [spaceId])
 
   const [artifacts, setArtifacts] = useState<Artifact[]>([])
+  const [activeTab, setActiveTab] = useState<'files' | 'skills'>('files')
   // Use external control if provided, otherwise internal state
   const isControlled = externalExpanded !== undefined
   const [internalExpanded, setInternalExpanded] = useState(true)
@@ -381,11 +383,11 @@ export function ArtifactRail({
     </div>
   )
 
-  // Shared footer renderer with folder and browser buttons
+  // Shared footer renderer with folder, browser and skills buttons
   // flex-shrink-0 ensures footer doesn't compress, allowing content to take remaining space
   const renderFooter = () => (
     <div className="flex-shrink-0 p-2 border-t border-border">
-      {viewMode === 'card' && artifacts.length > 0 && (
+      {activeTab === 'files' && viewMode === 'card' && artifacts.length > 0 && (
         <p className="text-xs text-muted-foreground text-center mb-2">
           {artifacts.length} {t('artifacts')}
         </p>
@@ -399,7 +401,10 @@ export function ArtifactRail({
         <div className="flex items-center gap-2">
           {/* Open folder button */}
           <button
-            onClick={handleOpenFolder}
+            onClick={() => {
+              setActiveTab('files')
+              handleOpenFolder()
+            }}
             className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-foreground rounded-lg transition-colors"
             title={t('Open folder (⌘⇧F)')}
           >
@@ -414,6 +419,19 @@ export function ArtifactRail({
           >
             <Globe className="w-4 h-4 text-blue-500" />
             <span>{t('Browser')}</span>
+          </button>
+          {/* Skills button */}
+          <button
+            onClick={() => setActiveTab(activeTab === 'skills' ? 'files' : 'skills')}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs rounded-lg transition-colors ${
+              activeTab === 'skills'
+                ? 'text-yellow-500 bg-yellow-500/10'
+                : 'text-yellow-500 hover:bg-secondary'
+            }`}
+            title={t('Skills')}
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>{t('Skills')}</span>
           </button>
         </div>
       )}
@@ -471,22 +489,26 @@ export function ArtifactRail({
               {/* Header */}
               <div className="p-3 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-muted-foreground">{t('Artifacts')}</span>
-                  <button
-                    onClick={toggleViewMode}
-                    className={`
-                      p-1 rounded transition-all duration-200
-                      hover:bg-secondary/80
-                      ${viewMode === 'tree' ? 'bg-secondary text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground'}
-                    `}
-                    title={viewMode === 'card' ? t('Switch to tree view') : t('Switch to card view')}
-                  >
-                    {viewMode === 'card' ? (
-                      <FolderTree className="w-3.5 h-3.5" />
-                    ) : (
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                    )}
-                  </button>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {activeTab === 'skills' ? t('Skills') : t('Artifacts')}
+                  </span>
+                  {activeTab === 'files' && (
+                    <button
+                      onClick={toggleViewMode}
+                      className={`
+                        p-1 rounded transition-all duration-200
+                        hover:bg-secondary/80
+                        ${viewMode === 'tree' ? 'bg-secondary text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground'}
+                      `}
+                      title={viewMode === 'card' ? t('Switch to tree view') : t('Switch to card view')}
+                    >
+                      {viewMode === 'card' ? (
+                        <FolderTree className="w-3.5 h-3.5" />
+                      ) : (
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  )}
                 </div>
                 <button
                   onClick={() => setMobileOverlayOpen(false)}
@@ -498,7 +520,7 @@ export function ArtifactRail({
               </div>
 
               {/* Content */}
-              {renderContent()}
+              {activeTab === 'files' ? renderContent() : <SkillsList />}
 
               {/* Footer */}
               {renderFooter()}
@@ -534,37 +556,40 @@ export function ArtifactRail({
       )}
 
       {/* Header - height matches CanvasTabs (py-1.5 + h-7 content = ~40px) */}
-      <div className="flex-shrink-0 px-3 h-10 border-b border-border flex items-center justify-between">
-        {isExpanded && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium text-muted-foreground">{t('Artifacts')}</span>
-            <button
-              onClick={toggleViewMode}
-              className={`
-                p-1 rounded transition-all duration-200
-                hover:bg-secondary/80
-                ${viewMode === 'tree' ? 'bg-secondary text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground'}
-              `}
-              title={viewMode === 'card' ? t('Switch to tree view (developer)') : t('Switch to card view')}
-            >
-              {viewMode === 'card' ? (
-                <FolderTree className="w-3.5 h-3.5" />
-              ) : (
-                <LayoutGrid className="w-3.5 h-3.5" />
-              )}
-            </button>
-          </div>
-        )}
-        <button
-          onClick={handleToggleExpanded}
-          className="p-1 hover:bg-secondary rounded transition-colors"
-        >
-          <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? '' : 'rotate-180'}`} />
-        </button>
-      </div>
+      {/* Hide header when skills tab is active (skills has its own header) */}
+      {(activeTab === 'files' || !isExpanded) && (
+        <div className="flex-shrink-0 px-3 h-10 border-b border-border flex items-center justify-between">
+          {isExpanded && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-muted-foreground">{t('Artifacts')}</span>
+              <button
+                onClick={toggleViewMode}
+                className={`
+                  p-1 rounded transition-all duration-200
+                  hover:bg-secondary/80
+                  ${viewMode === 'tree' ? 'bg-secondary text-primary' : 'text-muted-foreground/50 hover:text-muted-foreground'}
+                `}
+                title={viewMode === 'card' ? t('Switch to tree view (developer)') : t('Switch to card view')}
+              >
+                {viewMode === 'card' ? (
+                  <FolderTree className="w-3.5 h-3.5" />
+                ) : (
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                )}
+              </button>
+            </div>
+          )}
+          <button
+            onClick={handleToggleExpanded}
+            className="p-1 hover:bg-secondary rounded transition-colors"
+          >
+            <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? '' : 'rotate-180'}`} />
+          </button>
+        </div>
+      )}
 
       {/* Content */}
-      {isExpanded && renderContent()}
+      {isExpanded && (activeTab === 'files' ? renderContent() : <SkillsList />)}
 
       {/* Footer */}
       {isExpanded && renderFooter()}
@@ -594,6 +619,18 @@ export function ArtifactRail({
                 title={t('Open browser')}
               >
                 <Globe className="w-5 h-5 text-blue-500" />
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('skills')
+                  if (!isExpanded) {
+                    handleToggleExpanded()
+                  }
+                }}
+                className="p-2 hover:bg-secondary rounded-lg transition-colors"
+                title={t('Skills')}
+              >
+                <Sparkles className="w-5 h-5 text-yellow-500" />
               </button>
             </>
           )}

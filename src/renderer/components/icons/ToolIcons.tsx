@@ -88,6 +88,9 @@ export const toolIconMap: Record<string, LucideIcon> = {
   // Notebook
   NotebookEdit: FileCode,
 
+  // Skill
+  Skill: Sparkles,
+
   // Other
   AskUserQuestion: MessageSquare,
 }

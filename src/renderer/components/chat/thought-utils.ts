@@ -22,7 +22,7 @@ import type { Thought } from '../../types'
 // i18n static keys for extraction (DO NOT REMOVE)
 // prettier-ignore
 void function _i18nThoughtKeys(t: (k: string) => string) {
-  t('Thinking'); t('Tool call'); t('Tool result'); t('System'); t('Error'); t('Complete')
+  t('Thinking'); t('Tool call'); t('Tool result'); t('System'); t('Error'); t('Complete'); t('Invoking skill')
 }
 
 // ============================================
@@ -76,7 +76,7 @@ export function getThoughtIcon(type: Thought['type'], toolName?: string): Lucide
  * @param isError - Override to show error color
  * @returns Tailwind color class string
  */
-export function getThoughtColor(type: Thought['type'], isError?: boolean): string {
+export function getThoughtColor(type: Thought['type'], isError?: boolean, toolName?: string): string {
   // Tool errors use amber (warning) instead of red (destructive) because
   // they are internal AI feedback, not user-facing errors
   if (isError) return 'text-amber-500'
@@ -85,6 +85,7 @@ export function getThoughtColor(type: Thought['type'], isError?: boolean): strin
     case 'thinking':
       return 'text-blue-400'
     case 'tool_use':
+      if (toolName === 'Skill') return 'text-yellow-500'
       return 'text-amber-400'
     case 'tool_result':
       return 'text-green-400'
@@ -107,11 +108,12 @@ export function getThoughtColor(type: Thought['type'], isError?: boolean): strin
  * @param type - Thought type
  * @returns Display label string (English, not translated)
  */
-export function getThoughtLabelKey(type: Thought['type']): string {
+export function getThoughtLabelKey(type: Thought['type'], toolName?: string): string {
   switch (type) {
     case 'thinking':
       return 'Thinking'
     case 'tool_use':
+      if (toolName === 'Skill') return 'Invoking skill'
       return 'Tool call'
     case 'tool_result':
       return 'Tool result'
@@ -150,6 +152,16 @@ export function getToolFriendlyFormat(
   toolInput?: Record<string, unknown>
 ): string {
   if (!toolInput) return ''
+
+  // Skill tool: show skill name and args
+  if (toolName === 'Skill') {
+    const skillName = typeof toolInput.skill === 'string' ? toolInput.skill : ''
+    const args = typeof toolInput.args === 'string' ? toolInput.args : ''
+    if (args) {
+      return `/${skillName}: ${truncateText(args, 50)}`
+    }
+    return skillName ? `/${skillName}` : 'Unknown skill'
+  }
 
   switch (toolName) {
     case 'Bash':

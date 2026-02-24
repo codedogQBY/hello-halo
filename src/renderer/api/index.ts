@@ -21,7 +21,19 @@ import type {
   HealthRecoveryResponse,
   HealthReportResponse,
   HealthExportResponse,
-  HealthCheckResponse
+  HealthCheckResponse,
+  SkillsListResponse,
+  Skill,
+  SkillValidationResult,
+  CreateSkillRequest,
+  UpdateSkillRequest,
+  ImportUrlRequest,
+  ImportFileRequest,
+  ImportGithubRequest,
+  GithubDiscoverResult,
+  BatchImportResult,
+  SkillSource,
+  SkillPermission
 } from '../../shared/types'
 
 // Response type
@@ -1203,6 +1215,106 @@ export const api = {
       return { success: false, error: 'Only available in desktop app' }
     }
     return window.halo.runHealthCheck()
+  },
+
+  // ===== Skills =====
+  listSkills: async (spaceId?: string): Promise<ApiResponse<SkillsListResponse>> => {
+    if (isElectron()) {
+      return window.halo.listSkills(spaceId)
+    }
+    return httpRequest('GET', spaceId ? `/api/skills?spaceId=${spaceId}` : '/api/skills')
+  },
+
+  getSkill: async (skillId: string, source: SkillSource, spaceId?: string): Promise<ApiResponse<Skill>> => {
+    if (isElectron()) {
+      return window.halo.getSkill(skillId, source, spaceId)
+    }
+    return httpRequest('GET', `/api/skills/${skillId}?source=${source}${spaceId ? `&spaceId=${spaceId}` : ''}`)
+  },
+
+  createSkill: async (request: CreateSkillRequest): Promise<ApiResponse<Skill>> => {
+    if (isElectron()) {
+      return window.halo.createSkill(request)
+    }
+    return httpRequest('POST', '/api/skills', { ...request })
+  },
+
+  updateSkill: async (skillId: string, request: UpdateSkillRequest): Promise<ApiResponse<Skill>> => {
+    if (isElectron()) {
+      return window.halo.updateSkill(skillId, request)
+    }
+    return httpRequest('PUT', `/api/skills/${skillId}`, { ...request })
+  },
+
+  deleteSkill: async (skillId: string, source: SkillSource, spaceId?: string): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.deleteSkill(skillId, source, spaceId)
+    }
+    return httpRequest('DELETE', `/api/skills/${skillId}?source=${source}${spaceId ? `&spaceId=${spaceId}` : ''}`)
+  },
+
+  toggleSkill: async (skillId: string, enabled: boolean): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.toggleSkill(skillId, enabled)
+    }
+    return httpRequest('PUT', `/api/skills/${skillId}/toggle`, { enabled })
+  },
+
+  importSkillFromUrl: async (request: ImportUrlRequest): Promise<ApiResponse<Skill>> => {
+    if (isElectron()) {
+      return window.halo.importSkillFromUrl(request)
+    }
+    return httpRequest('POST', '/api/skills/import/url', { ...request })
+  },
+
+  importSkillFromLocal: async (request: ImportFileRequest): Promise<ApiResponse<Skill>> => {
+    if (isElectron()) {
+      return window.halo.importSkillFromLocal(request)
+    }
+    return { success: false, error: 'Only available in desktop app' }
+  },
+
+  discoverGithubSkills: async (url: string): Promise<ApiResponse<GithubDiscoverResult>> => {
+    if (isElectron()) {
+      return window.halo.discoverGithubSkills(url)
+    }
+    return httpRequest('POST', '/api/skills/github/discover', { url })
+  },
+
+  importFromGithub: async (request: ImportGithubRequest): Promise<ApiResponse<BatchImportResult>> => {
+    if (isElectron()) {
+      return window.halo.importFromGithub(request)
+    }
+    return httpRequest('POST', '/api/skills/github/import', { ...request })
+  },
+
+  validateSkill: async (content: string): Promise<ApiResponse<SkillValidationResult>> => {
+    if (isElectron()) {
+      return window.halo.validateSkill(content)
+    }
+    return httpRequest('POST', '/api/skills/validate', { content })
+  },
+
+  // ===== Skill Permissions =====
+  getSkillPermissions: async (): Promise<ApiResponse<SkillPermission[]>> => {
+    if (isElectron()) {
+      return window.halo.getSkillPermissions()
+    }
+    return httpRequest('GET', '/api/skills/permissions')
+  },
+
+  setSkillPermission: async (permission: SkillPermission): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.setSkillPermission(permission)
+    }
+    return httpRequest('POST', '/api/skills/permissions', { ...permission })
+  },
+
+  removeSkillPermission: async (skillId: string, scope?: 'all' | 'invocation-only'): Promise<ApiResponse> => {
+    if (isElectron()) {
+      return window.halo.removeSkillPermission(skillId, scope)
+    }
+    return httpRequest('DELETE', `/api/skills/permissions/${skillId}${scope ? `?scope=${scope}` : ''}`)
   },
 }
 

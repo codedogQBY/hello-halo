@@ -19,14 +19,17 @@
  * - Bottom toolbar for future extensibility
  */
 
-import { useState, useRef, useEffect, KeyboardEvent, ClipboardEvent, DragEvent } from 'react'
-import { Plus, ImagePlus, Loader2, AlertCircle, Atom, Globe } from 'lucide-react'
+import { useState, useRef, useEffect, useCallback, KeyboardEvent, ClipboardEvent, DragEvent } from 'react'
+import { Plus, ImagePlus, Loader2, AlertCircle, Atom, Globe, Zap } from 'lucide-react'
 import { useOnboardingStore } from '../../stores/onboarding.store'
 import { useAIBrowserStore } from '../../stores/ai-browser.store'
+import { useSpaceStore } from '../../stores/space.store'
 import { getOnboardingPrompt } from '../onboarding/onboardingData'
 import { ImageAttachmentPreview } from './ImageAttachmentPreview'
 import { processImage, isValidImageType, formatFileSize } from '../../utils/imageProcessor'
+import { api } from '../../api'
 import type { ImageAttachment } from '../../types'
+import type { Skill } from '../../../shared/types/skill'
 import { useTranslation } from '../../i18n'
 
 interface InputAreaProps {
@@ -60,9 +63,34 @@ export function InputArea({ onSend, onStop, isGenerating, placeholder, isCompact
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const attachMenuRef = useRef<HTMLDivElement>(null)
+  const suggestionsRef = useRef<HTMLDivElement>(null)
 
   // AI Browser state
   const { enabled: aiBrowserEnabled, setEnabled: setAIBrowserEnabled } = useAIBrowserStore()
+
+  // Skills autocomplete state
+  const currentSpace = useSpaceStore(state => state.currentSpace)
+  const [allSkills, setAllSkills] = useState<Skill[]>([])
+  const [skillSuggestions, setSkillSuggestions] = useState<Skill[]>([])
+  const [showSkillSuggestions, setShowSkillSuggestions] = useState(false)
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0)
+
+  // Load all skills for autocomplete
+  useEffect(() => {
+    api.listSkills(currentSpace?.id)
+      .then(result => {
+        if (result.success && result.data) {
+          const invocable = [
+            ...result.data.userSkills,
+            ...result.data.projectSkills
+          ].filter(s => s.userInvocable && s.enabled)
+          setAllSkills(invocable)
+        }
+      })
+      .catch(err => {
+        console.error('[InputArea] Failed to load skills:', err)
+      })
+  }, [currentSpace?.id])
 
   // Auto-clear error after 3 seconds
   useEffect(() => {
@@ -71,6 +99,30 @@ export function InputArea({ onSend, onStop, isGenerating, placeholder, isCompact
       return () => clearTimeout(timer)
     }
   }, [imageError])
+
+  // Skill autocomplete: watch content changes
+  useEffect(() => {
+    if (content.startsWith('/') && content.length >= 1 && allSkills.length > 0) {
+      const query = content.slice(1).toLowerCase()
+      const matches = query.length === 0
+        ? allSkills
+        : allSkills.filter(s =>
+            s.id.toLowerCase().includes(query) || s.name.toLowerCase().includes(query)
+          )
+      setSkillSuggestions(matches)
+      setShowSkillSuggestions(matches.length > 0)
+      setSelectedSuggestionIndex(0)
+    } else {
+      setShowSkillSuggestions(false)
+    }
+  }, [content, allSkills])
+
+  // Insert skill from autocomplete
+  const insertSkill = useCallback((skill: Skill) => {
+    setContent(`/${skill.id} `)
+    setShowSkillSuggestions(false)
+    textareaRef.current?.focus()
+  }, [])
 
   // Close attachment menu when clicking outside
   useEffect(() => {
@@ -268,6 +320,36 @@ export function InputArea({ onSend, onStop, isGenerating, placeholder, isCompact
     // This prevents Enter from sending the message while confirming IME candidates
     if (e.nativeEvent.isComposing) return
 
+    // Skill autocomplete keyboard navigation
+    if (showSkillSuggestions) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedSuggestionIndex(prev =>
+          prev < skillSuggestions.length - 1 ? prev + 1 : 0
+        )
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedSuggestionIndex(prev =>
+          prev > 0 ? prev - 1 : skillSuggestions.length - 1
+        )
+        return
+      }
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        e.preventDefault()
+        if (skillSuggestions[selectedSuggestionIndex]) {
+          insertSkill(skillSuggestions[selectedSuggestionIndex])
+        }
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowSkillSuggestions(false)
+        return
+      }
+    }
+
     // Mobile: Enter for newline, send via button only
     // PC: Enter to send, Shift+Enter for newline
     if (e.key === 'Enter' && !e.shiftKey && !isMobile()) {
@@ -313,6 +395,38 @@ export function InputArea({ onSend, onStop, isGenerating, placeholder, isCompact
         />
 
         {/* Input container */}
+        <div className="relative">
+          {/* Skill autocomplete suggestions */}
+          {showSkillSuggestions && (
+            <div
+              ref={suggestionsRef}
+              className="absolute bottom-full left-0 right-0 mb-2 bg-popover border border-border rounded-lg shadow-lg max-h-60 overflow-auto z-10"
+            >
+              {skillSuggestions.map((skill, index) => (
+                <button
+                  key={skill.id}
+                  onClick={() => insertSkill(skill)}
+                  className={`w-full px-3 py-2 text-left flex items-center gap-2 transition-colors ${
+                    index === selectedSuggestionIndex
+                      ? 'bg-secondary'
+                      : 'hover:bg-secondary/50'
+                  }`}
+                >
+                  <Zap className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-sm">/{skill.id}</span>
+                    {skill.description && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {skill.description}
+                      </p>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div
           className={`
             relative flex flex-col rounded-2xl transition-all duration-200
