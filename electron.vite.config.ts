@@ -57,7 +57,9 @@ const buildMetaDefine = {
 export default defineConfig({
   main: {
     plugins: [
-      externalizeDepsPlugin()
+      externalizeDepsPlugin({
+        exclude: ['electron-updater']
+      })
     ],
     define: analyticsDefine,
     build: {
