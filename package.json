@@ -231,5 +231,11 @@
         }
       ]
     }
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "@parcel/watcher"
+    ]
   }
 }
