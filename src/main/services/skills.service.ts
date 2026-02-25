@@ -6,9 +6,11 @@
  * Supports user-level and project-level skills.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync, renameSync, copyFileSync } from 'fs'
-import { join, basename, relative } from 'path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync, rmSync, renameSync, copyFileSync, mkdtempSync } from 'fs'
+import { join, basename, relative, dirname } from 'path'
 import { app } from 'electron'
+import { execFileSync } from 'child_process'
+import { tmpdir } from 'os'
 import { getHaloDir } from './config.service'
 import { getSpace } from './space.service'
 import type {
@@ -996,7 +998,7 @@ function copyDirRecursive(src: string, dest: string): void {
 }
 
 // ============================================================================
-// GitHub Repository Import
+// GitHub Repository Import (using git clone to avoid API rate limits)
 // ============================================================================
 
 /**
@@ -1028,65 +1030,99 @@ function parseGithubUrl(url: string): { owner: string; repo: string; branch?: st
 }
 
 /**
- * Recursively search GitHub repo for SKILL.md files using the GitHub API
+ * Clone a GitHub repo to a temp directory using git clone --depth 1
+ * This avoids GitHub API rate limits entirely
  */
-async function findSkillMdFiles(
-  owner: string,
-  repo: string,
-  branch: string,
-  searchPath: string,
-  depth = 0
-): Promise<Array<{ name: string; path: string; downloadUrl: string }>> {
-  const results: Array<{ name: string; path: string; downloadUrl: string }> = []
-
-  // Limit recursion depth to avoid excessive API calls
-  if (depth > 4) return results
+function cloneGithubRepo(owner: string, repo: string, branch?: string): { success: boolean; path?: string; error?: string } {
+  const tempDir = mkdtempSync(join(tmpdir(), `halo-skill-${repo}-`))
+  const gitUrl = `https://github.com/${owner}/${repo}.git`
 
   try {
-    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${searchPath}?ref=${branch}`
-    const headers: Record<string, string> = {
-      'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'Halo-Skills-Importer'
+    // Use --depth 1 for shallow clone (faster, less data)
+    // Use execFileSync with args array to prevent shell injection
+    const args = ['clone', '--depth', '1']
+    if (branch) {
+      args.push('--branch', branch)
+    }
+    args.push(gitUrl, tempDir)
+    execFileSync('git', args, {
+      encoding: 'utf-8',
+      timeout: 60000, // 60 seconds timeout
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    console.log(`[Skills] Cloned ${owner}/${repo} to ${tempDir}`)
+    return { success: true, path: tempDir }
+  } catch (error) {
+    // Clean up on failure
+    try {
+      rmSync(tempDir, { recursive: true, force: true })
+    } catch { /* ignore */ }
+
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    console.error(`[Skills] Failed to clone ${gitUrl}:`, errorMsg)
+
+    if (errorMsg.includes('Repository not found') || errorMsg.includes('404')) {
+      return { success: false, error: `Repository not found: ${owner}/${repo}` }
+    }
+    if (errorMsg.includes('Could not resolve host') || errorMsg.includes('network')) {
+      return { success: false, error: 'Network error. Please check your internet connection.' }
+    }
+    if (errorMsg.includes('Authentication failed')) {
+      return { success: false, error: 'Authentication failed. The repository may be private.' }
     }
 
-    const response = await fetch(apiUrl, { headers })
+    return { success: false, error: `Failed to clone repository: ${errorMsg}` }
+  }
+}
 
-    if (!response.ok) {
-      if (response.status === 403) {
-        console.warn(`[Skills] GitHub API rate limit hit while searching ${searchPath}`)
-      }
-      return results
-    }
+/**
+ * Recursively find SKILL.md files in a local directory
+ */
+function findSkillMdFilesLocal(
+  basePath: string,
+  currentPath: string,
+  depth = 0
+): Array<{ name: string; relativePath: string; absolutePath: string }> {
+  const results: Array<{ name: string; relativePath: string; absolutePath: string }> = []
 
-    const items = await response.json() as Array<{ name: string; path: string; type: string; download_url: string | null }>
+  // Limit recursion depth
+  if (depth > 5) return results
 
-    for (const item of items) {
-      if (item.type === 'file' && item.name === 'SKILL.md' && item.download_url) {
-        // The skill name is the parent directory name
-        const parentDir = item.path.split('/').slice(-2, -1)[0] || repo
-        results.push({
-          name: parentDir,
-          path: item.path.replace('/SKILL.md', ''),
-          downloadUrl: item.download_url
-        })
-      } else if (item.type === 'dir') {
-        // Recurse into directories (limit depth by not going into common non-skill dirs)
-        const skipDirs = ['node_modules', '.git', 'dist', 'build', 'out', 'bin', 'tests', 'test', '__tests__', '.github']
-        if (!skipDirs.includes(item.name)) {
-          const subResults = await findSkillMdFiles(owner, repo, branch, item.path, depth + 1)
+  // Skip common non-skill directories
+  const skipDirs = ['node_modules', '.git', 'dist', 'build', 'out', 'bin', 'tests', 'test', '__tests__', '.github', '.vscode', '.idea']
+
+  try {
+    const entries = readdirSync(currentPath, { withFileTypes: true })
+
+    for (const entry of entries) {
+      const entryPath = join(currentPath, entry.name)
+
+      if (entry.isDirectory()) {
+        if (!skipDirs.includes(entry.name)) {
+          const subResults = findSkillMdFilesLocal(basePath, entryPath, depth + 1)
           results.push(...subResults)
         }
+      } else if (entry.isFile() && entry.name === 'SKILL.md') {
+        // Skill name is the parent directory name
+        const relativePath = relative(basePath, currentPath) || '.'
+        const skillName = currentPath === basePath ? basename(basePath) : basename(currentPath)
+        results.push({
+          name: skillName,
+          relativePath,
+          absolutePath: entryPath
+        })
       }
     }
   } catch (error) {
-    console.error(`[Skills] Error searching ${searchPath}:`, error)
+    console.error(`[Skills] Error scanning ${currentPath}:`, error)
   }
 
   return results
 }
 
 /**
- * Discover skills in a GitHub repository
+ * Discover skills in a GitHub repository using git clone
+ * This avoids GitHub API rate limits by cloning the repo locally
  */
 export async function discoverGithubSkills(url: string): Promise<GithubDiscoverResult> {
   const parsed = parseGithubUrl(url)
@@ -1094,64 +1130,72 @@ export async function discoverGithubSkills(url: string): Promise<GithubDiscoverR
     return { success: false, repoUrl: url, skills: [], error: 'Invalid GitHub URL format' }
   }
 
-  const { owner, repo, subpath } = parsed
+  const { owner, repo, branch, subpath } = parsed
+
+  // Clone the repo
+  const cloneResult = cloneGithubRepo(owner, repo, branch)
+  if (!cloneResult.success || !cloneResult.path) {
+    return {
+      success: false,
+      repoUrl: url,
+      skills: [],
+      error: cloneResult.error || 'Failed to clone repository'
+    }
+  }
 
   try {
-    // Determine default branch if not specified
-    let branch = parsed.branch
-    if (!branch) {
-      const repoResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'Halo-Skills-Importer'
-        }
-      })
-      if (!repoResponse.ok) {
-        if (repoResponse.status === 403) {
-          return { success: false, repoUrl: url, skills: [], error: 'GitHub API rate limit exceeded. Please try again later.' }
-        }
-        return { success: false, repoUrl: url, skills: [], error: `Repository not found: ${owner}/${repo}` }
-      }
-      const repoData = await repoResponse.json() as { default_branch: string }
-      branch = repoData.default_branch
-    }
+    const repoPath = cloneResult.path
 
-    // Search from subpath or common skill directories
-    // For repos like vercel-labs/agent-skills, skills are in skills/<name>/SKILL.md
-    // Also check root for standalone skills repos
+    // Determine search paths
     const searchPaths = subpath
-      ? [subpath]
-      : ['skills', '.claude/skills', '.cursor/skills', '']
+      ? [join(repoPath, subpath)]
+      : [
+          join(repoPath, 'skills'),
+          join(repoPath, '.claude', 'skills'),
+          join(repoPath, '.cursor', 'skills'),
+          repoPath // Root as fallback
+        ]
 
     const allSkills: GithubDiscoveredSkill[] = []
     const seenNames = new Set<string>()
 
     for (const searchPath of searchPaths) {
-      const found = await findSkillMdFiles(owner, repo, branch, searchPath)
+      if (!existsSync(searchPath)) continue
+
+      const found = findSkillMdFilesLocal(searchPath, searchPath)
+
       for (const item of found) {
         if (!seenNames.has(item.name)) {
           seenNames.add(item.name)
-          // Fetch content to get description from frontmatter
+
+          // Read content to get description from frontmatter
           let description = ''
           try {
-            const mdResponse = await fetch(item.downloadUrl)
-            if (mdResponse.ok) {
-              const content = await mdResponse.text()
-              const fm = parseSkillMd(content)
-              description = fm.frontmatter.description || ''
-            }
+            const content = readFileSync(item.absolutePath, 'utf-8')
+            const fm = parseSkillMd(content)
+            description = fm.frontmatter.description || ''
           } catch {
-            // Ignore fetch errors for description
+            // Ignore read errors
           }
+
+          // Build the relative path from repo root
+          const relativeFromRepo = relative(repoPath, dirname(item.absolutePath))
+
           allSkills.push({
             name: item.name,
             description,
-            path: item.path,
-            downloadUrl: item.downloadUrl
+            path: relativeFromRepo,
+            // For downloadUrl, we'll use a special marker to indicate it's from local clone
+            downloadUrl: `local://${owner}/${repo}/${relativeFromRepo}/SKILL.md`
           })
         }
       }
     }
+
+    // Clean up the temp directory
+    try {
+      rmSync(repoPath, { recursive: true, force: true })
+    } catch { /* ignore */ }
 
     return {
       success: true,
@@ -1159,6 +1203,11 @@ export async function discoverGithubSkills(url: string): Promise<GithubDiscoverR
       skills: allSkills,
     }
   } catch (error) {
+    // Clean up on error
+    try {
+      rmSync(cloneResult.path, { recursive: true, force: true })
+    } catch { /* ignore */ }
+
     return {
       success: false,
       repoUrl: url,
@@ -1170,7 +1219,7 @@ export async function discoverGithubSkills(url: string): Promise<GithubDiscoverR
 
 /**
  * Import selected skills from a GitHub repository
- * Downloads entire skill directories (SKILL.md + supporting files like scripts/, references/)
+ * Uses git clone to avoid GitHub API rate limits
  */
 export async function importFromGithub(request: ImportGithubRequest): Promise<BatchImportResult> {
   const parsed = parseGithubUrl(request.url)
@@ -1183,155 +1232,163 @@ export async function importFromGithub(request: ImportGithubRequest): Promise<Ba
     }
   }
 
-  const discover = await discoverGithubSkills(request.url)
+  const { owner, repo, branch } = parsed
 
-  if (!discover.success || discover.skills.length === 0) {
+  // Clone the repo
+  const cloneResult = cloneGithubRepo(owner, repo, branch)
+  if (!cloneResult.success || !cloneResult.path) {
     return {
       success: false,
       imported: [],
-      failed: [{ name: request.url, error: discover.error || 'No skills found in repository' }],
+      failed: [{ name: request.url, error: cloneResult.error || 'Failed to clone repository' }],
       totalDiscovered: 0
     }
   }
 
-  // Filter by selected skills if specified
-  const skillsToImport = request.selectedSkills && request.selectedSkills.length > 0
-    ? discover.skills.filter(s => request.selectedSkills!.includes(s.name))
-    : discover.skills
+  const repoPath = cloneResult.path
 
-  const dir = request.targetLevel === 'user'
-    ? getUserSkillsDir()
-    : getProjectSkillsDir(request.spaceId!)
+  try {
+    // Determine search paths
+    const subpath = parsed.subpath
+    const searchPaths = subpath
+      ? [join(repoPath, subpath)]
+      : [
+          join(repoPath, 'skills'),
+          join(repoPath, '.claude', 'skills'),
+          join(repoPath, '.cursor', 'skills'),
+          repoPath
+        ]
 
-  if (!dir) {
+    // Find all skills
+    const allFound: Array<{ name: string; absolutePath: string }> = []
+    const seenNames = new Set<string>()
+
+    for (const searchPath of searchPaths) {
+      if (!existsSync(searchPath)) continue
+
+      const found = findSkillMdFilesLocal(searchPath, searchPath)
+      for (const item of found) {
+        if (!seenNames.has(item.name)) {
+          seenNames.add(item.name)
+          allFound.push({
+            name: item.name,
+            absolutePath: item.absolutePath
+          })
+        }
+      }
+    }
+
+    if (allFound.length === 0) {
+      rmSync(repoPath, { recursive: true, force: true })
+      return {
+        success: false,
+        imported: [],
+        failed: [{ name: request.url, error: 'No skills found in repository' }],
+        totalDiscovered: 0
+      }
+    }
+
+    // Filter by selected skills if specified
+    const skillsToImport = request.selectedSkills && request.selectedSkills.length > 0
+      ? allFound.filter(s => request.selectedSkills!.includes(s.name))
+      : allFound
+
+    const dir = request.targetLevel === 'user'
+      ? getUserSkillsDir()
+      : getProjectSkillsDir(request.spaceId!)
+
+    if (!dir) {
+      rmSync(repoPath, { recursive: true, force: true })
+      return {
+        success: false,
+        imported: [],
+        failed: [{ name: 'all', error: 'Cannot determine skills directory' }],
+        totalDiscovered: allFound.length
+      }
+    }
+
+    const imported: { name: string; skill?: Skill }[] = []
+    const failed: { name: string; error: string }[] = []
+
+    for (const foundSkill of skillsToImport) {
+      const id = sanitizeName(request.customName && skillsToImport.length === 1 ? request.customName : foundSkill.name)
+      const skillPath = join(dir, id)
+
+      if (existsSync(skillPath)) {
+        failed.push({ name: foundSkill.name, error: `Skill "${id}" already exists` })
+        continue
+      }
+
+      try {
+        // Read SKILL.md from local clone
+        const skillMdPath = foundSkill.absolutePath
+        const content = readFileSync(skillMdPath, 'utf-8')
+
+        const validation = validateSkill(content)
+        if (!validation.valid) {
+          failed.push({ name: foundSkill.name, error: `Invalid: ${validation.errors.join(', ')}` })
+          continue
+        }
+
+        mkdirSync(skillPath, { recursive: true })
+        writeFileSync(join(skillPath, 'SKILL.md'), content)
+
+        // Copy supporting files from the skill directory
+        const skillDir = dirname(skillMdPath)
+        const entries = readdirSync(skillDir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (entry.name === 'SKILL.md') continue
+
+          const srcPath = join(skillDir, entry.name)
+          const destPath = join(skillPath, entry.name)
+
+          try {
+            if (entry.isDirectory()) {
+              copyDirRecursive(srcPath, destPath)
+            } else if (entry.isFile()) {
+              copyFileSync(srcPath, destPath)
+            }
+          } catch {
+            // Skip individual file copy failures
+          }
+        }
+
+        const skill = loadSkill(skillPath, request.targetLevel)
+        imported.push({ name: foundSkill.name, skill: skill || undefined })
+      } catch (error) {
+        if (existsSync(skillPath)) {
+          rmSync(skillPath, { recursive: true, force: true })
+        }
+        failed.push({
+          name: foundSkill.name,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+
+    // Clean up temp directory
+    try {
+      rmSync(repoPath, { recursive: true, force: true })
+    } catch { /* ignore */ }
+
+    return {
+      success: imported.length > 0,
+      imported,
+      failed,
+      totalDiscovered: allFound.length
+    }
+  } catch (error) {
+    // Clean up on error
+    try {
+      rmSync(repoPath, { recursive: true, force: true })
+    } catch { /* ignore */ }
+
     return {
       success: false,
       imported: [],
-      failed: [{ name: 'all', error: 'Cannot determine skills directory' }],
-      totalDiscovered: discover.skills.length
+      failed: [{ name: request.url, error: `Failed to import: ${error instanceof Error ? error.message : String(error)}` }],
+      totalDiscovered: 0
     }
-  }
-
-  // Determine branch for downloading supporting files
-  const { owner, repo } = parsed
-  let branch = parsed.branch
-  if (!branch) {
-    try {
-      const repoResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
-        headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Halo-Skills-Importer' }
-      })
-      if (repoResponse.ok) {
-        const repoData = await repoResponse.json() as { default_branch: string }
-        branch = repoData.default_branch
-      }
-    } catch {
-      // Will fall back to SKILL.md-only download
-    }
-  }
-
-  const imported: { name: string; skill?: Skill }[] = []
-  const failed: { name: string; error: string }[] = []
-
-  for (const discoveredSkill of skillsToImport) {
-    const id = sanitizeName(request.customName && skillsToImport.length === 1 ? request.customName : discoveredSkill.name)
-    const skillPath = join(dir, id)
-
-    if (existsSync(skillPath)) {
-      failed.push({ name: discoveredSkill.name, error: `Skill "${id}" already exists` })
-      continue
-    }
-
-    try {
-      // Download SKILL.md
-      const response = await fetch(discoveredSkill.downloadUrl)
-      if (!response.ok) {
-        failed.push({ name: discoveredSkill.name, error: `HTTP ${response.status}` })
-        continue
-      }
-
-      const content = await response.text()
-      const validation = validateSkill(content)
-      if (!validation.valid) {
-        failed.push({ name: discoveredSkill.name, error: `Invalid: ${validation.errors.join(', ')}` })
-        continue
-      }
-
-      mkdirSync(skillPath, { recursive: true })
-      writeFileSync(join(skillPath, 'SKILL.md'), content)
-
-      // Try to download supporting files (scripts/, references/, etc.)
-      if (branch) {
-        await downloadSupportingFiles(owner, repo, branch, discoveredSkill.path, skillPath)
-      }
-
-      const skill = loadSkill(skillPath, request.targetLevel)
-      imported.push({ name: discoveredSkill.name, skill: skill || undefined })
-    } catch (error) {
-      if (existsSync(skillPath)) {
-        rmSync(skillPath, { recursive: true, force: true })
-      }
-      failed.push({
-        name: discoveredSkill.name,
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
-  }
-
-  return {
-    success: imported.length > 0,
-    imported,
-    failed,
-    totalDiscovered: discover.skills.length
-  }
-}
-
-/**
- * Download supporting files from a GitHub skill directory (scripts/, references/, etc.)
- */
-async function downloadSupportingFiles(
-  owner: string,
-  repo: string,
-  branch: string,
-  skillGithubPath: string,
-  localSkillPath: string,
-  depth = 0
-): Promise<void> {
-  if (depth > 3) return
-
-  try {
-    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${skillGithubPath}?ref=${branch}`
-    const response = await fetch(apiUrl, {
-      headers: { 'Accept': 'application/vnd.github.v3+json', 'User-Agent': 'Halo-Skills-Importer' }
-    })
-
-    if (!response.ok) return
-
-    const items = await response.json() as Array<{
-      name: string; path: string; type: string; download_url: string | null
-    }>
-
-    for (const item of items) {
-      if (item.name === 'SKILL.md') continue // Already downloaded
-
-      if (item.type === 'file' && item.download_url) {
-        try {
-          const fileResponse = await fetch(item.download_url)
-          if (fileResponse.ok) {
-            const fileContent = await fileResponse.text()
-            const localPath = join(localSkillPath, item.name)
-            writeFileSync(localPath, fileContent)
-          }
-        } catch {
-          // Skip individual file failures
-        }
-      } else if (item.type === 'dir') {
-        const localSubDir = join(localSkillPath, item.name)
-        mkdirSync(localSubDir, { recursive: true })
-        await downloadSupportingFiles(owner, repo, branch, item.path, localSubDir, depth + 1)
-      }
-    }
-  } catch {
-    // Non-critical: supporting files are optional
   }
 }
 
