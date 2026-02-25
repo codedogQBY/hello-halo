@@ -18,6 +18,8 @@ export { SystemSection } from './SystemSection'
 export { RemoteAccessSection } from './RemoteAccessSection'
 export { AboutSection } from './AboutSection'
 export { SkillsSection } from './SkillsSection'
+export { NotificationChannelsSection } from './NotificationChannelsSection'
+export { RegistrySection } from './RegistrySection'
 
 // Existing Components
 export { McpServerList } from './McpServerList'

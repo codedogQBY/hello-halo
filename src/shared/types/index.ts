@@ -57,6 +57,9 @@ export * from './artifact'
 // Skill types (shared between main process and renderer)
 export * from './skill'
 
+// Notification channel types (shared between main process and renderer)
+export * from './notification-channels'
+
 // File changes types (shared between main process agent and renderer diff)
 export type { FileChangesSummary, ThoughtLike } from '../file-changes'
 export { countChangedLines, calculateDiffStats, extractFileChangesSummaryFromThoughts } from '../file-changes'
